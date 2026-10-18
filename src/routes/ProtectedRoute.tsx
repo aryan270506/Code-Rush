@@ -38,8 +38,14 @@ export default function ProtectedRoute({
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // 2. Check if email verification is required and unverified
-  if (requireVerified && !isEmailVerified) {
+  const isDemoUser = Boolean(
+    user?.uid?.startsWith("demo-") ||
+      user?.email?.toLowerCase().includes("codebattle.dev") ||
+      profile?.uid?.startsWith("demo-")
+  );
+
+  // 2. Check if email verification is required and unverified (demo accounts are always verified)
+  if (requireVerified && !isEmailVerified && !isDemoUser) {
     return (
       <Navigate
         to={`/verify-email?email=${encodeURIComponent(user.email || "")}&uid=${user.uid}`}

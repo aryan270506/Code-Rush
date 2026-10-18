@@ -5,11 +5,13 @@ import AuthLayout from "../../components/auth/AuthLayout";
 import AuthFormField from "../../components/auth/AuthFormField";
 import PasswordField from "../../components/auth/PasswordField";
 import { validateEmail } from "../../utils/validation";
-import { authService, DEMO_CREDENTIALS } from "../../services/authService";
+import { DEMO_CREDENTIALS } from "../../services/authService";
+import { useAuth } from "../../hooks/useAuth";
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { login, loginDemo } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -21,9 +23,35 @@ export default function LoginPage() {
   const queryParams = new URLSearchParams(location.search);
   const infoNotice = queryParams.get("notice");
 
+  const handleDemoClick = (role: "participant" | "admin") => {
+    loginDemo(role);
+    if (role === "admin") {
+      navigate("/admin/dashboard", { replace: true });
+    } else {
+      navigate("/participant/dashboard", { replace: true });
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (loading) return;
+
+    // Check if submitting demo credentials directly through form
+    const cleanEmail = email.trim().toLowerCase();
+    if (
+      cleanEmail === DEMO_CREDENTIALS.admin.email.toLowerCase() &&
+      password === DEMO_CREDENTIALS.admin.password
+    ) {
+      handleDemoClick("admin");
+      return;
+    }
+    if (
+      cleanEmail === DEMO_CREDENTIALS.participant.email.toLowerCase() &&
+      password === DEMO_CREDENTIALS.participant.password
+    ) {
+      handleDemoClick("participant");
+      return;
+    }
 
     // Validate inputs
     const newErrors: { email?: string; password?: string; general?: string } = {};
@@ -40,14 +68,20 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const { user, profile } = await authService.login(email, password);
+      const { user, profile } = await login(email, password);
+
+      const isDemo = Boolean(
+        user.uid?.startsWith("demo-") || cleanEmail.includes("codebattle.dev")
+      );
 
       // Check email verification status
       const isVerified =
+        isDemo ||
         user.emailVerified ||
         profile?.emailVerified ||
         sessionStorage.getItem("cb_verified_" + user.uid) === "true" ||
-        sessionStorage.getItem("cb_verified_" + email.toLowerCase().trim()) === "true";
+        sessionStorage.getItem("cb_verified_" + cleanEmail) === "true";
+
       if (!isVerified) {
         // Redirect to email verification page with uid and email
         navigate(`/verify-email?email=${encodeURIComponent(user.email || email)}&uid=${user.uid}`, {
@@ -68,7 +102,11 @@ export default function LoginPage() {
       let errorMsg = "Invalid email or password. Please check your credentials.";
 
       if (err instanceof Error) {
-        if (err.message.includes("auth/user-not-found") || err.message.includes("auth/wrong-password") || err.message.includes("auth/invalid-credential")) {
+        if (
+          err.message.includes("auth/user-not-found") ||
+          err.message.includes("auth/wrong-password") ||
+          err.message.includes("auth/invalid-credential")
+        ) {
           errorMsg = "Invalid email address or password.";
         } else if (err.message.includes("auth/too-many-requests")) {
           errorMsg = "Too many failed attempts. Please reset your password or try again later.";
@@ -179,16 +217,12 @@ export default function LoginPage() {
         {/* Quick Demo Credentials for Instant Dashboard Testing */}
         <div className="pt-4 border-t border-border/60">
           <p className="text-[11px] font-semibold tracking-wider uppercase text-text-muted text-center mb-2.5">
-            ⚡ Quick Demo Logins
+            ⚡ Quick Demo Logins (1-Click Instant Access)
           </p>
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
-              onClick={() => {
-                setEmail(DEMO_CREDENTIALS.participant.email);
-                setPassword(DEMO_CREDENTIALS.participant.password);
-                setErrors({});
-              }}
+              onClick={() => handleDemoClick("participant")}
               className="flex flex-col items-center justify-center p-2.5 rounded-xl border border-border/80 bg-bg-secondary/70 hover:border-violet-primary/50 hover:bg-violet-primary/10 transition-all cursor-pointer text-center group"
             >
               <span className="text-xs font-bold text-violet-light group-hover:text-white">
@@ -201,11 +235,7 @@ export default function LoginPage() {
 
             <button
               type="button"
-              onClick={() => {
-                setEmail(DEMO_CREDENTIALS.admin.email);
-                setPassword(DEMO_CREDENTIALS.admin.password);
-                setErrors({});
-              }}
+              onClick={() => handleDemoClick("admin")}
               className="flex flex-col items-center justify-center p-2.5 rounded-xl border border-border/80 bg-bg-secondary/70 hover:border-cyan-primary/50 hover:bg-cyan-primary/10 transition-all cursor-pointer text-center group"
             >
               <span className="text-xs font-bold text-cyan-light group-hover:text-white">

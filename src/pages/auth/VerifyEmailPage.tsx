@@ -56,6 +56,22 @@ export default function VerifyEmailPage() {
     return () => clearInterval(timer);
   }, []);
 
+  // Demo accounts are immediately verified and should never be on verify-email
+  useEffect(() => {
+    const isDemo =
+      user?.uid?.startsWith("demo-") ||
+      user?.email?.toLowerCase().includes("codebattle.dev") ||
+      emailParam.toLowerCase().includes("codebattle.dev");
+
+    if (isDemo) {
+      const dest =
+        user?.email?.toLowerCase().includes("admin") || emailParam.toLowerCase().includes("admin")
+          ? "/admin/dashboard"
+          : "/participant/dashboard";
+      navigate(dest, { replace: true });
+    }
+  }, [user, emailParam, navigate]);
+
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
