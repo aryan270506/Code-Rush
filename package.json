@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "seed:participants": "node scripts/seed-credentials.mjs",
+    "seed:participants": "node scripts/push-to-rtdb.mjs && node scripts/seed-credentials.mjs",
     "lint": "oxlint",
     "preview": "vite preview"
   },
