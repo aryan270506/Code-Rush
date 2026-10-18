@@ -76,7 +76,7 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
 
   return (
     <header
-      className={`fixed top-0 right-0 z-20 h-16 bg-[#080A18]/90 backdrop-blur-md border-b border-[#272B49] transition-all duration-300 flex items-center justify-between px-4 sm:px-6 ${
+      className={`fixed top-0 right-0 z-20 h-16 bg-bg-primary/80 backdrop-blur-md border-b border-border transition-all duration-300 flex items-center justify-between px-4 sm:px-6 ${
         collapsed ? 'lg:left-20' : 'lg:left-64'
       } left-0`}
     >
@@ -85,28 +85,28 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
         {/* Mobile slide-out toggle */}
         <button
           onClick={onToggleMobileSidebar}
-          className="lg:hidden flex items-center justify-center h-8 w-8 rounded-lg bg-[#0088CC] text-white shadow-md shadow-[#0088CC]/30 transition-colors"
+          className="lg:hidden flex items-center justify-center h-8 w-8 rounded-lg bg-bg-card hover:bg-bg-card-hover text-text-muted hover:text-text-primary border border-border transition-colors cursor-pointer"
           aria-label="Open navigation menu"
         >
-          <Menu className="h-4.5 w-4.5" />
+          <Menu className="h-4 w-4" />
         </button>
 
-        {/* Desktop collapse/expand toggle button matching reference image */}
+        {/* Desktop collapse/expand toggle button */}
         {onToggleCollapse && (
           <button
             onClick={onToggleCollapse}
-            className="hidden lg:flex items-center justify-center h-8 w-8 rounded-lg bg-[#0088CC] hover:bg-[#0077B5] text-white shadow-md shadow-[#0088CC]/30 transition-all cursor-pointer"
+            className="hidden lg:flex items-center justify-center h-8 w-8 rounded-lg bg-bg-card hover:bg-bg-card-hover text-text-muted hover:text-text-primary border border-border transition-colors cursor-pointer"
             title={collapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
           >
-            <Menu className="h-4.5 w-4.5" />
+            <Menu className="h-4 w-4" />
           </button>
         )}
 
-        <div className="hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-full bg-[#13162D] border border-[#272B49] text-xs">
-          <Radio className="h-3.5 w-3.5 text-[#10B981] animate-pulse" />
-          <span className="text-[#F8FAFC] font-medium">Code Battle 2026</span>
-          <span className="text-[#737D9D]">•</span>
-          <span className="text-[#8B5CF6] font-mono text-[11px] font-semibold">ROUND 2: CODING BATTLE</span>
+        <div className="hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-full bg-violet-primary/10 border border-violet-primary/30 text-xs">
+          <Radio className="h-3.5 w-3.5 text-success animate-pulse" />
+          <span className="text-text-primary font-medium">Code Battle 2026</span>
+          <span className="text-text-muted">•</span>
+          <span className="text-violet-light font-mono text-[11px] font-semibold">OPERATIONS CONSOLE</span>
         </div>
       </div>
 

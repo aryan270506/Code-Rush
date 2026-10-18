@@ -10,6 +10,9 @@ import {
   HelpCircle,
   Flame,
   ShieldAlert,
+  Sparkles,
+  Bot,
+  Loader2,
 } from 'lucide-react';
 import { AdminLayout } from '../../components/admin/layout/AdminLayout';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/admin/ui/Table';
@@ -20,6 +23,7 @@ import { Tabs } from '../../components/admin/ui/Tabs';
 import { ConfirmDialog } from '../../components/admin/ui/ConfirmDialog';
 import { EmptyState } from '../../components/admin/ui/EmptyState';
 import { adminDataService } from '../../services/adminDataService';
+import { realtimeDbService } from '../../services/realtimeDbService';
 import { useToast } from '../../context/ToastContext';
 import type { Question, RoundName, QuestionDifficulty, RoundType, TestCase } from '../../types/admin';
 
@@ -38,6 +42,13 @@ export default function QuestionBank() {
   const [editorActiveTab, setEditorActiveTab] = useState<'details' | 'testcases' | 'constraints' | 'solution'>('details');
   const [previewQuestion, setPreviewQuestion] = useState<Question | null>(null);
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
+
+  // AI Draft States
+  const [aiDraftModalOpen, setAiDraftModalOpen] = useState(false);
+  const [aiTopic, setAiTopic] = useState('');
+  const [aiRoundType, setAiRoundType] = useState<RoundType>('coding');
+  const [aiDifficulty, setAiDifficulty] = useState<QuestionDifficulty>('medium');
+  const [isGeneratingAi, setIsGeneratingAi] = useState(false);
 
   // Form State
   const [formData, setFormData] = useState<{
@@ -241,14 +252,24 @@ export default function QuestionBank() {
       title="Question Bank"
       subtitle="Manage challenge statements, test suites, and hidden evaluation vectors for all 4 rounds."
       action={
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={handleOpenAdd}
-          icon={<Plus className="h-4 w-4" />}
-        >
-          Add Question
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setAiDraftModalOpen(true)}
+            icon={<Sparkles className="h-4 w-4 text-violet-light" />}
+          >
+            AI Draft Question
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={handleOpenAdd}
+            icon={<Plus className="h-4 w-4" />}
+          >
+            Add Question
+          </Button>
+        </div>
       }
     >
       {/* Search & Filters */}
@@ -836,6 +857,143 @@ export default function QuestionBank() {
           </div>
         </Modal>
       )}
+
+      {/* AI Question Drafting Modal */}
+      <Modal
+        isOpen={aiDraftModalOpen}
+        onClose={() => !isGeneratingAi && setAiDraftModalOpen(false)}
+        title="AI Challenge Generator (Groq & Gemini)"
+        maxWidth="md"
+      >
+        <div className="space-y-4">
+          <div className="p-3.5 rounded-xl border border-violet-primary/40 bg-violet-primary/10 text-xs text-text-secondary flex items-start gap-3">
+            <Bot className="h-5 w-5 text-violet-light shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-text-primary">Admin-in-the-Loop AI Workflow</p>
+              <p className="mt-1 text-text-muted">
+                Our trusted backend calls Groq and Gemini to construct challenge definitions, test suites, and constraints. You review, refine, and approve the generated draft before it is published.
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-text-secondary mb-1.5">
+              Topic or Algorithmic Concept *
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. Graph Shortest Path, Two Pointer Sliding Window, Memory Leak"
+              value={aiTopic}
+              onChange={(e) => setAiTopic(e.target.value)}
+              className="w-full rounded-lg bg-[#070714] border border-[#272B49] px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-violet-primary"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-text-secondary mb-1.5">
+                Target Round Type
+              </label>
+              <select
+                value={aiRoundType}
+                onChange={(e) => setAiRoundType(e.target.value as RoundType)}
+                className="w-full rounded-lg bg-[#070714] border border-[#272B49] px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-violet-primary"
+              >
+                <option value="quiz">Quiz Battle (MCQ)</option>
+                <option value="coding">Coding Battle</option>
+                <option value="debugging">Debugging Battle</option>
+                <option value="final">Final Battle</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-text-secondary mb-1.5">
+                Target Difficulty
+              </label>
+              <select
+                value={aiDifficulty}
+                onChange={(e) => setAiDifficulty(e.target.value as QuestionDifficulty)}
+                className="w-full rounded-lg bg-[#070714] border border-[#272B49] px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-violet-primary"
+              >
+                <option value="easy">Easy (Fundamentals)</option>
+                <option value="medium">Medium (Standard)</option>
+                <option value="hard">Hard (Advanced)</option>
+                <option value="expert">Expert (Championship)</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#272B49]">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setAiDraftModalOpen(false)}
+              disabled={isGeneratingAi}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={async () => {
+                if (!aiTopic.trim()) {
+                  showToast('Please specify a topic or problem concept.', 'error');
+                  return;
+                }
+                setIsGeneratingAi(true);
+                try {
+                  const draft: any = await realtimeDbService.generateQuestionDraft({
+                    topic: aiTopic,
+                    roundType: aiRoundType,
+                    difficulty: aiDifficulty,
+                  });
+
+                  setEditingQuestion(null);
+                  setFormData({
+                    title: draft.title || `AI Challenge: ${aiTopic}`,
+                    round: aiRoundType === 'quiz' ? 'Quiz Battle' : aiRoundType === 'debugging' ? 'Debugging Battle' : aiRoundType === 'final' ? 'Final Battle' : 'Coding Battle',
+                    type: aiRoundType,
+                    difficulty: aiDifficulty,
+                    marks: draft.points || (aiRoundType === 'quiz' ? 10 : 100),
+                    description: draft.statement || draft.description || '',
+                    options: draft.options || ['Option A', 'Option B', 'Option C', 'Option D'],
+                    correctAnswer: draft.correctAnswer || 'Option A',
+                    explanation: draft.explanation || '',
+                    inputDescription: draft.inputFormat || '',
+                    outputDescription: draft.outputFormat || '',
+                    constraints: Array.isArray(draft.constraints) ? draft.constraints.join(', ') : (draft.constraints || '1 <= N <= 10^5'),
+                    sampleTestCases: draft.sampleTestCases || [
+                      { id: 'sample-1', input: draft.sampleInput || '1 2', expectedOutput: draft.sampleOutput || '3', isHidden: false, weight: 20 },
+                    ],
+                    hiddenTestCases: draft.hiddenTestCases || [
+                      { id: 'hidden-1', input: '100 200', expectedOutput: '300', isHidden: true, weight: 80 },
+                    ],
+                    buggyCode: draft.buggyCode || '',
+                    solutionCode: draft.solutionCode || '',
+                    supportedLanguages: ['C++', 'Python', 'Java'],
+                    executionTimeLimitMs: 2000,
+                    memoryLimitMb: 512,
+                    partialScoring: true,
+                  });
+
+                  setAiDraftModalOpen(false);
+                  setEditorActiveTab('details');
+                  setEditorModalOpen(true);
+                  showToast('AI Draft generated with Groq/Gemini! Review and approve before saving.', 'success');
+                } catch (err: any) {
+                  showToast(err.message || 'Failed to generate question draft.', 'error');
+                } finally {
+                  setIsGeneratingAi(false);
+                }
+              }}
+              disabled={isGeneratingAi}
+              icon={isGeneratingAi ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            >
+              {isGeneratingAi ? 'Drafting with AI...' : 'Generate Draft'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Delete Confirmation */}
       <ConfirmDialog

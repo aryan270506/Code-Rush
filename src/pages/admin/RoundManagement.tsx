@@ -105,7 +105,7 @@ export default function RoundManagement() {
       scheduled: { variant: 'bright', label: 'Scheduled' },
       draft: { variant: 'neutral', label: 'Draft' },
     };
-    const s = config[status];
+    const s = config[status] ?? { variant: 'neutral', label: 'Unknown' };
     return <Badge variant={s.variant} size="sm" dot={s.dot}>{s.label}</Badge>;
   };
 

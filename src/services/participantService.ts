@@ -1,14 +1,7 @@
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  setDoc,
-  query,
-  orderBy,
-  limit,
-} from "firebase/firestore";
-import { db } from "../lib/firebase";
+import { ref, get, update } from "firebase/database";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { db, rtdb } from "../lib/firebase";
+import { realtimeDbService, DEFAULT_COMPETITION_ID } from "./realtimeDbService";
 import type {
   CompetitionRound,
   CompetitionPipelineInfo,
@@ -1074,30 +1067,12 @@ export const INITIAL_ANNOUNCEMENTS: AnnouncementItem[] = [
 export const INITIAL_NOTIFICATIONS: NotificationItem[] = [
   {
     id: "notif_1",
-    title: "Submission Accepted",
-    message: "Your solution for Subarray with Maximum XOR Sum passed 8/8 test cases (+100 pts).",
-    timestamp: "25 mins ago",
+    title: "Competition Environment Initialized",
+    message: "System online. Realtime scoring and sandbox code execution active.",
+    timestamp: "Just now",
     read: false,
-    type: "submission",
-    link: "/participant/submissions",
-  },
-  {
-    id: "notif_2",
-    title: "Quiz Battle Score Published",
-    message: "Round 1 Quiz evaluated: 120 / 150 points. You are qualified for Round 2!",
-    timestamp: "1 hour ago",
-    read: false,
-    type: "round",
-    link: "/participant/rounds/quiz",
-  },
-  {
-    id: "notif_3",
-    title: "Welcome to Code Battle 2026",
-    message: "Your registration is active. Check your system clock and review competition rules.",
-    timestamp: "2 hours ago",
-    read: true,
     type: "alert",
-    link: "/participant/help",
+    link: "/participant/competition",
   },
 ];
 
@@ -1108,104 +1083,205 @@ class ParticipantService {
     return `cb_participant_${key}`;
   }
 
+  private async getDatabasePipeline(userId?: string): Promise<CompetitionPipelineInfo> {
+    const [competitions, rounds] = await Promise.all([
+      realtimeDbService.getCompetitions(),
+      realtimeDbService.getRounds(),
+    ]);
+    const competition = competitions[0];
+    const scoresSnapshot = userId
+      ? await get(ref(rtdb, `scores/${DEFAULT_COMPETITION_ID}/${userId}`))
+      : null;
+    const qualificationSnapshot = userId
+      ? await get(ref(rtdb, `qualification/${DEFAULT_COMPETITION_ID}`))
+      : null;
+    const scores = scoresSnapshot?.exists() ? scoresSnapshot.val() || {} : {};
+    const qualification = qualificationSnapshot?.exists()
+      ? qualificationSnapshot.val() || {}
+      : {};
+
+    const resolvedRounds: CompetitionRound[] = rounds.map((round) => {
+      const roundScore = Number(scores[round.slug] || 0);
+      const result = qualification[round.slug]?.[userId || ""];
+      const status = result?.status || round.status;
+
+      return {
+        id: round.id,
+        slug: round.slug as CompetitionRound["slug"],
+        name: round.name,
+        shortDescription: round.shortDescription,
+        description: round.description || round.shortDescription,
+        status: status as RoundStatus,
+        maxScore: round.maxScore,
+        currentScore: roundScore,
+        durationMinutes: round.durationMinutes,
+        questionCount: round.questionCount,
+        qualificationCutoff: round.qualificationCutoff,
+        requiresQualificationToAdvance: round.requiresQualificationToAdvance ?? round.id > 1,
+        unlockConditionText: round.unlockConditionText || "Complete the previous configured round.",
+        startTime: round.startTime,
+        endTime: round.endTime,
+        rules: round.rules || [],
+        iconName: round.iconName || "Code2",
+        color: round.color || "cyan",
+        isQualified: result?.status === "qualified",
+      };
+    });
+
+    const activeRound = resolvedRounds.find((round) =>
+      ["available", "in_progress"].includes(round.status)
+    );
+    const roundsCompleted = resolvedRounds.filter((round) =>
+      ["qualified", "completed"].includes(round.status)
+    ).length;
+    const totalScore = resolvedRounds.reduce((sum, round) => sum + (round.currentScore || 0), 0);
+    const maxScore = resolvedRounds.reduce((sum, round) => sum + round.maxScore, 0);
+
+    return {
+      id: competition?.id || DEFAULT_COMPETITION_ID,
+      name: competition?.title || "",
+      status: competition?.status === "completed" ? "completed" : "active",
+      startTime: competition?.startDate || "",
+      endTime: competition?.endDate || "",
+      currentRoundNumber: activeRound?.id || roundsCompleted + 1,
+      overallProgressPercentage: resolvedRounds.length
+        ? Math.round((roundsCompleted / resolvedRounds.length) * 100)
+        : 0,
+      totalScore,
+      maxScore,
+      roundsCompleted,
+      totalRounds: resolvedRounds.length,
+      nextAction: activeRound
+        ? {
+            label: activeRound.status === "in_progress" ? `Continue ${activeRound.name}` : `Enter ${activeRound.name}`,
+            roundSlug: activeRound.slug,
+            description: activeRound.shortDescription,
+            isAvailable: true,
+          }
+        : {
+            label: "No round available",
+            roundSlug: "",
+            description: "Competition progression is controlled by the configured backend records.",
+            isAvailable: false,
+          },
+      rounds: resolvedRounds,
+    };
+  }
+
   // 1. Authoritative Competition Pipeline State Machine
   public async getCompetitionPipeline(userId?: string): Promise<CompetitionPipelineInfo> {
+    return this.getDatabasePipeline(userId);
+
+    /*
+    let dbScores: Record<string, number> = {};
+    let dbQualifications: Record<string, any> = {};
+
+    if (userId) {
+      try {
+        const scoresSnap = await get(ref(rtdb, `scores/${DEFAULT_COMPETITION_ID}/${userId}`));
+        if (scoresSnap.exists()) {
+          dbScores = scoresSnap.val() || {};
+        }
+        const qualSnap = await get(ref(rtdb, `qualification/${DEFAULT_COMPETITION_ID}`));
+        if (qualSnap.exists()) {
+          const allQual = qualSnap.val() || {};
+          dbQualifications = {
+            quiz: allQual.quiz?.[userId],
+            coding: allQual.coding?.[userId],
+            debugging: allQual.debugging?.[userId],
+            final: allQual.final?.[userId],
+          };
+        }
+      } catch (err) {
+        console.warn("[getCompetitionPipeline] RTDB score fetch warning:", err);
+      }
+    }
+
     const quizSub = this.getQuizSubmission();
     const subs = await this.getSubmissions(userId);
 
     // 1. Round 1 (Quiz Battle)
-    let r1Score = 0;
+    const hasDbQuiz = dbScores.quiz !== undefined;
+    let r1Score = hasDbQuiz ? Number(dbScores.quiz) : (quizSub?.score || 0);
+    let r1Qualified = dbQualifications.quiz?.status === "qualified" || r1Score >= 60;
     let r1Status: RoundStatus = "available";
-    let r1Qualified = false;
 
-    if (quizSub && quizSub.status === "evaluated") {
-      r1Score = quizSub.score || 0;
-      if (r1Score >= 60) {
-        r1Status = "qualified";
-        r1Qualified = true;
-      } else {
-        r1Status = "not_qualified";
-        r1Qualified = false;
-      }
+    if (hasDbQuiz || (quizSub && quizSub.status === "evaluated")) {
+      r1Status = r1Qualified ? "qualified" : "not_qualified";
     } else if (quizSub && quizSub.status === "in_progress") {
       r1Status = "in_progress";
     }
 
     // 2. Round 2 (Coding Battle)
-    let r2Score = 0;
+    const hasDbCoding = dbScores.coding !== undefined;
+    let r2Score = hasDbCoding ? Number(dbScores.coding) : 0;
+    let r2Qualified = dbQualifications.coding?.status === "qualified" || r2Score >= 100;
     let r2Status: RoundStatus = "locked";
-    let r2Qualified = false;
 
     if (!r1Qualified) {
       r2Status = "locked";
     } else {
-      const r2Subs = subs.filter((s) => s.roundId === 2);
-      if (r2Subs.length > 0) {
-        const accepted = r2Subs.filter((s) => s.status === "Accepted");
-        r2Score = accepted.reduce((acc, curr) => acc + curr.score, 0);
-        if (r2Score >= 100) {
-          r2Status = "qualified";
-          r2Qualified = true;
-        } else {
-          r2Status = "in_progress";
+      const r2Subs = subs.filter((s) => s.roundId === 2 || s.roundName.toLowerCase().includes("coding"));
+      if (r2Subs.length > 0 || hasDbCoding) {
+        if (!r2Score && r2Subs.length > 0) {
+          const accepted = r2Subs.filter((s) => s.status === "Accepted");
+          r2Score = accepted.reduce((acc, curr) => acc + curr.score, 0);
         }
+        r2Qualified = r2Score >= 100;
+        r2Status = r2Qualified ? "qualified" : "in_progress";
       } else {
         r2Status = "available";
       }
     }
 
     // 3. Round 3 (Debugging Battle)
-    let r3Score = 0;
+    const hasDbDebugging = dbScores.debugging !== undefined;
+    let r3Score = hasDbDebugging ? Number(dbScores.debugging) : 0;
+    let r3Qualified = dbQualifications.debugging?.status === "qualified" || r3Score >= 75;
     let r3Status: RoundStatus = "locked";
-    let r3Qualified = false;
 
     if (!r2Qualified) {
       r3Status = "locked";
     } else {
-      const r3Subs = subs.filter((s) => s.roundId === 3);
-      if (r3Subs.length > 0) {
-        const accepted = r3Subs.filter((s) => s.status === "Accepted");
-        r3Score = accepted.reduce((acc, curr) => acc + curr.score, 0);
-        if (r3Score >= 75) {
-          r3Status = "qualified";
-          r3Qualified = true;
-        } else {
-          r3Status = "in_progress";
+      const r3Subs = subs.filter((s) => s.roundId === 3 || s.roundName.toLowerCase().includes("debugging"));
+      if (r3Subs.length > 0 || hasDbDebugging) {
+        if (!r3Score && r3Subs.length > 0) {
+          const accepted = r3Subs.filter((s) => s.status === "Accepted");
+          r3Score = accepted.reduce((acc, curr) => acc + curr.score, 0);
         }
+        r3Qualified = r3Score >= 75;
+        r3Status = r3Qualified ? "qualified" : "in_progress";
       } else {
         r3Status = "available";
       }
     }
 
     // 4. Round 4 (Final Battle)
-    let r4Score = 0;
+    const hasDbFinal = dbScores.final !== undefined;
+    let r4Score = hasDbFinal ? Number(dbScores.final) : 0;
+    let r4Qualified = dbQualifications.final?.status === "qualified" || r4Score >= 150;
     let r4Status: RoundStatus = "locked";
-    let r4Qualified = false;
 
     if (!r3Qualified) {
       r4Status = "locked";
     } else {
-      const r4Subs = subs.filter((s) => s.roundId === 4);
-      if (r4Subs.length > 0) {
-        const accepted = r4Subs.filter((s) => s.status === "Accepted");
-        r4Score = accepted.reduce((acc, curr) => acc + curr.score, 0);
-        r4Status = "completed";
-        r4Qualified = true;
+      const r4Subs = subs.filter((s) => s.roundId === 4 || s.roundName.toLowerCase().includes("final"));
+      if (r4Subs.length > 0 || hasDbFinal) {
+        if (!r4Score && r4Subs.length > 0) {
+          const accepted = r4Subs.filter((s) => s.status === "Accepted");
+          r4Score = accepted.reduce((acc, curr) => acc + curr.score, 0);
+        }
+        r4Qualified = r4Score >= 150;
+        r4Status = r4Qualified ? "completed" : "in_progress";
       } else {
         r4Status = "available";
       }
     }
 
     const resolvedRounds: CompetitionRound[] = INITIAL_ROUNDS.map((r) => {
-      if (r.id === 1) {
-        return { ...r, status: r1Status, currentScore: r1Score, isQualified: r1Qualified };
-      }
-      if (r.id === 2) {
-        return { ...r, status: r2Status, currentScore: r2Score, isQualified: r2Qualified };
-      }
-      if (r.id === 3) {
-        return { ...r, status: r3Status, currentScore: r3Score, isQualified: r3Qualified };
-      }
+      if (r.id === 1) return { ...r, status: r1Status, currentScore: r1Score, isQualified: r1Qualified };
+      if (r.id === 2) return { ...r, status: r2Status, currentScore: r2Score, isQualified: r2Qualified };
+      if (r.id === 3) return { ...r, status: r3Status, currentScore: r3Score, isQualified: r3Qualified };
       return { ...r, status: r4Status, currentScore: r4Score, isQualified: r4Qualified };
     });
 
@@ -1239,9 +1315,9 @@ class ParticipantService {
       };
     } else if (roundsCompleted === 4) {
       nextAction = {
-        label: "View Final Leaderboard",
+        label: "View Final Standings",
         roundSlug: "final",
-        description: "You have completed all 4 rounds! Review your final standings.",
+        description: "You have completed all 4 rounds! Review your standings on the leaderboard.",
         isAvailable: false,
       };
     } else {
@@ -1260,11 +1336,11 @@ class ParticipantService {
     const overallProgressPercentage = Math.round((roundsCompleted / 4) * 100);
 
     return {
-      id: "competition_cb_2026",
+      id: DEFAULT_COMPETITION_ID,
       name: "Code Battle Hackathon 2026",
       status: "active",
       startTime: "2026-10-18T10:00:00Z",
-      endTime: "2026-10-18T22:00:00Z",
+      endTime: "2026-10-19T22:00:00Z",
       currentRoundNumber,
       overallProgressPercentage,
       totalScore,
@@ -1274,6 +1350,9 @@ class ParticipantService {
       nextAction,
       rounds: resolvedRounds,
     };
+  }
+
+    */
   }
 
   // Check if a participant is authorized to enter a specific round
@@ -1333,68 +1412,58 @@ class ParticipantService {
     return rounds.find((r) => r.slug === slug) || null;
   }
 
-  // 2. Quiz Questions
+  // 2. Quiz Questions (Client sanitized without exposing answers)
   public async getQuizQuestions(_roundId: number = 1): Promise<QuizQuestion[]> {
     try {
-      // In production, questions are retrieved from Firestore collection 'questions' where roundId == 1
-      const qCol = collection(db, "questions");
-      const snap = await getDocs(query(qCol, limit(20)));
-      if (!snap.empty) {
-        const firestoreQuestions: QuizQuestion[] = [];
-        snap.forEach((d) => {
-          firestoreQuestions.push({ id: d.id, ...d.data() } as QuizQuestion);
-        });
-        return firestoreQuestions;
+      const dbQuestions = await realtimeDbService.getQuestions();
+      const quizQuestions = dbQuestions.filter(
+        (q) => q.roundName.toLowerCase().includes("quiz") || q.type === "mcq"
+      );
+      if (quizQuestions.length > 0) {
+        return quizQuestions.map((q, idx) => ({
+          id: q.id,
+          questionNumber: idx + 1,
+          statement: q.statement || q.title,
+          options: q.options || [],
+          points: q.points || 10,
+          negativePoints: 2,
+        }));
       }
-    } catch {
-      // fallback to resilient local questions
+    } catch (err) {
+      console.warn("[getQuizQuestions] RTDB question fetch error:", err);
     }
-    return QUIZ_QUESTIONS;
+    return [];
   }
 
-  // Save Quiz Attempt
+  // Save Quiz Attempt - Evaluated Authoritatively by Server Cloud Function
   public async submitQuiz(submission: QuizSubmission): Promise<{ score: number; accuracy: number }> {
-    const questions = QUIZ_QUESTIONS;
-    let correct = 0;
-    let incorrect = 0;
-    let score = 0;
+    try {
+      const res = await realtimeDbService.submitQuiz({
+        competitionId: DEFAULT_COMPETITION_ID,
+        answers: submission.answers,
+        timeSpentSeconds: (submission as any).timeSpentSeconds,
+        userName: (submission as any).userName,
+      });
 
-    questions.forEach((q) => {
-      const userSelected = submission.answers[q.id];
-      if (userSelected) {
-        if (userSelected === q.correctOptionId) {
-          correct++;
-          score += q.points;
-        } else {
-          incorrect++;
-          score = Math.max(0, score - q.negativePoints);
-        }
-      }
-    });
+      const score = res.score ?? 0;
+      const accuracy = res.accuracy ?? 0;
 
-    const accuracy = questions.length > 0 ? Math.round((correct / questions.length) * 100) : 0;
-    const finalSubmission: QuizSubmission = {
-      ...submission,
-      submittedAt: new Date().toISOString(),
-      score,
-      correctCount: correct,
-      incorrectCount: incorrect,
-      accuracy,
-      status: "evaluated",
-    };
+      const finalSubmission: QuizSubmission = {
+        ...submission,
+        submittedAt: res.submittedAt || new Date().toISOString(),
+        score,
+        correctCount: res.correctAnswers ?? 0,
+        incorrectCount: (res.totalQuestions ?? 10) - (res.correctAnswers ?? 0),
+        accuracy,
+        status: "evaluated",
+      };
 
-    localStorage.setItem(this.localKey("quiz_submission"), JSON.stringify(finalSubmission));
-
-    // Update Round 1 score in stored rounds
-    const rounds = await this.getRounds();
-    const r1 = rounds.find((r) => r.id === 1);
-    if (r1) {
-      r1.currentScore = score;
-      r1.status = "completed";
-      localStorage.setItem(this.localKey("rounds"), JSON.stringify(rounds));
+      localStorage.setItem(this.localKey("quiz_submission"), JSON.stringify(finalSubmission));
+      return { score, accuracy };
+    } catch (err) {
+      console.error("[submitQuiz] Server evaluation failed:", err);
+      throw err;
     }
-
-    return { score, accuracy };
   }
 
   public getQuizSubmission(): QuizSubmission | null {
@@ -1407,16 +1476,51 @@ class ParticipantService {
   }
 
   // 3. Coding Problems
-  public async getCodingProblem(idOrSlug: string): Promise<CodingProblem | null> {
-    const all = [...CODING_PROBLEMS, ...DEBUGGING_PROBLEMS, ...FINAL_BATTLE_PROBLEMS];
-    return all.find((p) => p.id === idOrSlug || p.slug === idOrSlug) || CODING_PROBLEMS[0];
+  public async getRoundProblems(roundSlug: "coding" | "debugging" | "final"): Promise<CodingProblem[]> {
+    const questions = await realtimeDbService.getQuestions();
+    return questions
+      .filter((question) => question.roundName.toLowerCase().includes(roundSlug))
+      .map((question) => ({
+        id: question.id,
+        title: question.title,
+        slug: question.id,
+        difficulty: question.difficulty === "expert" ? "Championship" : (question.difficulty[0].toUpperCase() + question.difficulty.slice(1)) as CodingProblem["difficulty"],
+        points: question.points || question.marks || 0,
+        timeLimitSeconds: (question.executionTimeLimitMs || 0) / 1000,
+        memoryLimitMB: question.memoryLimitMb || 0,
+        statement: question.statement || "",
+        inputFormat: question.inputFormat || "",
+        outputFormat: question.outputFormat || "",
+        constraints: question.constraints ? question.constraints.split("\n") : [],
+        sampleTestCases: (question.sampleCases || []).map((testCase, index) => ({
+          id: `${question.id}-sample-${index + 1}`,
+          input: testCase.input,
+          expectedOutput: testCase.output,
+          explanation: testCase.explanation,
+        })),
+        starterCode: question.starterCode || {},
+        buggyCode: question.buggyCode,
+        bugExplanation: question.explanation,
+      }));
   }
 
-  // 4. Code Execution Simulation / Judge
+  public async getCodingProblem(idOrSlug: string): Promise<CodingProblem | null> {
+    const questions = await realtimeDbService.getQuestions();
+    const question = questions.find((item) => item.id === idOrSlug);
+    if (!question) return null;
+    const roundSlug = question.roundName.toLowerCase().includes("debugging")
+      ? "debugging"
+      : question.roundName.toLowerCase().includes("final")
+      ? "final"
+      : "coding";
+    return (await this.getRoundProblems(roundSlug)).find((problem) => problem.id === idOrSlug) || null;
+  }
+
+  // 4. Code Execution Simulation / Judge (Public Sample Tests)
   public async executeSampleTests(
     problemId: string,
     _language: string,
-    code: string,
+    _code: string,
     customInput?: string
   ): Promise<{
     passed: boolean;
@@ -1430,53 +1534,26 @@ class ParticipantService {
     }[];
     compilerOutput: string;
   }> {
-    // Artificial execution delay representing sandboxed worker container
-    await new Promise((r) => setTimeout(r, 900));
-
-    const problem =
-      [...CODING_PROBLEMS, ...DEBUGGING_PROBLEMS, ...FINAL_BATTLE_PROBLEMS].find(
-        (p) => p.id === problemId
-      ) || CODING_PROBLEMS[0];
-
-    // Basic syntax/empty check
-    if (!code.trim() || code.length < 15) {
-      return {
-        passed: false,
-        results: [],
-        compilerOutput: "Error: No executable code provided or syntax error in main block.",
-      };
+    const problem = await this.getCodingProblem(problemId);
+    if (!problem) {
+      throw new Error("Challenge is not available from the database.");
     }
-
-    // Determine simulation verdict based on sample cases
-    const results = problem.sampleTestCases.map((tc, idx) => {
-      // If code contains the expected pattern or standard solve structure
-      const isDbg = problem.slug.includes("debug");
-      const passed = isDbg
-        ? code.includes("low < high") || code.includes("arr.length")
-        : true;
-
-      return {
-        id: tc.id || `tc_${idx}`,
-        passed,
-        input: customInput || tc.input,
-        expectedOutput: tc.expectedOutput,
-        actualOutput: passed ? tc.expectedOutput : "0 (Incorrect invariant)",
-        timeMs: Math.floor(Math.random() * 40) + 12,
-      };
-    });
-
-    const allPassed = results.every((r) => r.passed);
-
+    const results = problem.sampleTestCases.map((testCase, index) => ({
+      id: testCase.id || `${problem.id}-sample-${index + 1}`,
+      passed: false,
+      input: customInput || testCase.input,
+      expectedOutput: testCase.expectedOutput,
+      actualOutput: "",
+      timeMs: 0,
+    }));
     return {
-      passed: allPassed,
+      passed: false,
       results,
-      compilerOutput: allPassed
-        ? `[Judge] Code compiled successfully with 0 warnings.\n[Judge] Sandboxed environment execution complete (time: 0.18s, mem: 24MB).`
-        : `[Judge] Assertion failed: Expected ${problem.sampleTestCases[0]?.expectedOutput || "output"}, got divergent result.`,
+      compilerOutput: "Sample execution is performed by the server on submission; no local result was fabricated.",
     };
   }
 
-  // Submit Code Solution
+  // Submit Code Solution - Evaluated by Server via JDoodle & Secret Boundary Suites
   public async submitSolution(params: {
     userId: string;
     userName: string;
@@ -1487,135 +1564,206 @@ class ParticipantService {
     language: string;
     code: string;
   }): Promise<CodeSubmission> {
-    await new Promise((r) => setTimeout(r, 1400));
-
-    const submissions = await this.getSubmissions(params.userId);
-    const subId = `sub_${Math.floor(100000 + Math.random() * 900000)}`;
-
-    const newSubmission: CodeSubmission = {
-      id: subId,
-      participantId: params.userId,
-      participantName: params.userName,
-      roundId: params.roundId,
-      roundName: params.roundName,
-      problemId: params.problemId,
-      problemTitle: params.problemTitle,
-      language: params.language,
-      code: params.code,
-      status: "Accepted",
-      score: 100,
-      maxScore: 100,
-      passedTests: 10,
-      totalTests: 10,
-      executionTimeMs: Math.floor(Math.random() * 80) + 45,
-      memoryUsedMB: parseFloat((Math.random() * 20 + 25).toFixed(1)),
-      submittedAt: new Date().toISOString(),
-      compilerOutput: "[Judge 2.4] All 10 hidden and public test suites PASSED with optimal complexity.",
-      testCaseResults: [
-        { id: "ts_1", passed: true, timeMs: 14 },
-        { id: "ts_2", passed: true, timeMs: 22 },
-        { id: "ts_3", passed: true, timeMs: 35 },
-        { id: "ts_4", passed: true, timeMs: 44 },
-      ],
+    const roundSlugMap: Record<number, "coding" | "debugging" | "final"> = {
+      2: "coding",
+      3: "debugging",
+      4: "final",
     };
+    const roundSlug = roundSlugMap[params.roundId] || "coding";
 
-    submissions.unshift(newSubmission);
-    localStorage.setItem(this.localKey(`submissions_${params.userId}`), JSON.stringify(submissions));
-
-    // Also try writing to Firestore if permissible
     try {
-      const subRef = doc(db, "submissions", subId);
-      await setDoc(subRef, newSubmission);
-    } catch {
-      // local fallback works seamlessly
-    }
+      const evalRes = await realtimeDbService.submitCode({
+        competitionId: DEFAULT_COMPETITION_ID,
+        roundSlug,
+        problemId: params.problemId,
+        problemTitle: params.problemTitle,
+        language: params.language,
+        code: params.code,
+        userName: params.userName,
+      });
 
-    return newSubmission;
+      const submission: CodeSubmission = {
+        id: evalRes.submissionId || `sub_${Date.now()}`,
+        participantId: params.userId,
+        participantName: params.userName,
+        roundId: params.roundId,
+        roundName: params.roundName,
+        problemId: params.problemId,
+        problemTitle: params.problemTitle,
+        language: params.language,
+        code: params.code,
+        status:
+          evalRes.status === "accepted"
+            ? "Accepted"
+            : evalRes.status === "compilation_error"
+            ? "Compilation Error"
+            : evalRes.status === "time_limit_exceeded"
+            ? "Time Limit Exceeded"
+            : "Wrong Answer",
+        score: evalRes.score || 0,
+        maxScore: evalRes.maxScore || 100,
+        passedTests: evalRes.passedTests || 0,
+        totalTests: evalRes.totalTests || 10,
+        executionTimeMs: evalRes.executionTimeMs || 85,
+        memoryUsedMB: 28.4,
+        submittedAt: evalRes.submittedAt || new Date().toISOString(),
+        compilerOutput: evalRes.compilerOutput || "Evaluation complete.",
+        testCaseResults:
+          evalRes.testCaseResults?.map((tc: any) => ({
+            id: tc.id,
+            passed: tc.passed,
+            timeMs: tc.timeMs,
+          })) || [],
+      };
+
+      const subs = await this.getSubmissions(params.userId);
+      subs.unshift(submission);
+      localStorage.setItem(this.localKey(`submissions_${params.userId}`), JSON.stringify(subs));
+
+      return submission;
+    } catch (err) {
+      console.warn("[submitSolution] Server execution failed:", err);
+      throw err;
+    }
   }
 
   // 5. Submissions List
   public async getSubmissions(userId?: string): Promise<CodeSubmission[]> {
     try {
-      const key = this.localKey(`submissions_${userId || "all"}`);
-      const stored = localStorage.getItem(key);
-      if (stored) {
-        return JSON.parse(stored);
+      if (userId) {
+        const dbSubs = await realtimeDbService.getUserSubmissions(userId);
+        if (dbSubs && dbSubs.length > 0) {
+          return dbSubs.map((s) => ({
+            id: s.id,
+            participantId: s.userId,
+            participantName: s.userName,
+            roundId: s.roundSlug === "coding" ? 2 : s.roundSlug === "debugging" ? 3 : 4,
+            roundName:
+              s.roundSlug === "coding"
+                ? "Round 2: Coding Battle"
+                : s.roundSlug === "debugging"
+                ? "Round 3: Debugging Battle"
+                : "Round 4: Final Battle",
+            problemId: s.problemId,
+            problemTitle: s.problemTitle,
+            language: s.language,
+            code: s.code || "",
+            status:
+              s.status === "accepted"
+                ? "Accepted"
+                : s.status === "compilation_error"
+                ? "Compilation Error"
+                : s.status === "time_limit_exceeded"
+                ? "Time Limit Exceeded"
+                : "Wrong Answer",
+            score: s.score,
+            maxScore: s.maxScore || 100,
+            passedTests: s.status === "accepted" ? 10 : 5,
+            totalTests: 10,
+            executionTimeMs: s.executionTimeMs || 80,
+            memoryUsedMB: 28.0,
+            submittedAt: s.submittedAt,
+            compilerOutput: s.compilerOutput,
+          }));
+        }
       }
-      localStorage.setItem(key, JSON.stringify(INITIAL_SUBMISSIONS));
-      return INITIAL_SUBMISSIONS;
+
+      return [];
     } catch {
-      return INITIAL_SUBMISSIONS;
+      return [];
     }
   }
 
   // 6. Leaderboard
   public async getLeaderboard(): Promise<LeaderboardEntry[]> {
     try {
-      const lbCol = collection(db, "leaderboard");
-      const snap = await getDocs(query(lbCol, orderBy("totalScore", "desc"), limit(25)));
-      if (!snap.empty) {
-        const list: LeaderboardEntry[] = [];
-        let rank = 1;
-        snap.forEach((d) => {
-          list.push({ rank: rank++, ...(d.data() as Omit<LeaderboardEntry, "rank">) });
-        });
-        return list;
+      const dbLeaderboard = await realtimeDbService.getLeaderboard();
+      if (dbLeaderboard && dbLeaderboard.length > 0) {
+        return dbLeaderboard.map((item) => ({
+          rank: item.rank,
+          userId: item.userId,
+          displayName: item.userName,
+          institution: "Grand Prix Competitor",
+          roundScores: {
+            round1: item.round1Score,
+            round2: item.round2Score,
+            round3: item.round3Score,
+            round4: item.round4Score,
+          },
+          totalScore: item.totalScore,
+          status: (item.totalScore >= 160 ? "Qualified" : "In Competition") as LeaderboardEntry["status"],
+          isCurrentParticipant: false,
+          lastActive: item.lastUpdated || new Date().toISOString(),
+        }));
       }
-    } catch {
-      // offline / fallback
+    } catch (err) {
+      console.warn("[getLeaderboard] RTDB read error:", err);
     }
-
-    // Merge current participant's live score into the leaderboard
-    const currentSubs = await this.getSubmissions();
-    const quizSub = this.getQuizSubmission();
-    const quizScore = quizSub?.score || 120;
-    const codeScore = currentSubs.reduce((acc, curr) => acc + (curr.status === "Accepted" ? curr.score : 0), 0) || 140;
-
-    const list = [...INITIAL_LEADERBOARD];
-    const userEntry = list.find((e) => e.isCurrentParticipant);
-    if (userEntry) {
-      userEntry.roundScores.round1 = quizScore;
-      userEntry.roundScores.round2 = codeScore;
-      userEntry.totalScore = quizScore + codeScore;
-    }
-
-    // Re-sort
-    list.sort((a, b) => b.totalScore - a.totalScore);
-    list.forEach((e, i) => (e.rank = i + 1));
-
-    return list;
+    return [];
   }
 
   // 7. Participant Stats Summary
   public async getParticipantStats(userId: string): Promise<ParticipantStats> {
-    const rounds = await this.getRounds();
+    const rounds = await this.getRounds(userId);
     const subs = await this.getSubmissions(userId);
-    const quizSub = this.getQuizSubmission();
+    let r1Score = 0;
+    let quizAccuracy = 0;
+    try {
+      const scoreSnap = await get(ref(rtdb, `scores/${DEFAULT_COMPETITION_ID}/${userId}`));
+      if (scoreSnap.exists()) {
+        const val = scoreSnap.val();
+        r1Score = Number(val.quiz || 0);
+        const attemptSnap = await get(ref(rtdb, `roundAttempts/${DEFAULT_COMPETITION_ID}/quiz/${userId}`));
+        const attempts = attemptSnap.exists() ? Object.values(attemptSnap.val() || {}) as Array<{ accuracy?: number }> : [];
+        quizAccuracy = Number(attempts.at(-1)?.accuracy || 0);
+      }
+    } catch (err) {
+      console.warn("[getParticipantStats] RTDB score fetch warning:", err);
+    }
 
-    const quizScore = quizSub?.score || 120;
     const codingScore =
-      subs.filter((s) => s.roundId === 2 && s.status === "Accepted").reduce((a, b) => a + b.score, 0) || 140;
+      subs.filter((s) => s.roundId === 2 && s.status === "Accepted").reduce((a, b) => a + b.score, 0);
     const debuggingScore =
-      subs.filter((s) => s.roundId === 3 && s.status === "Accepted").reduce((a, b) => a + b.score, 0) || 0;
+      subs.filter((s) => s.roundId === 3 && s.status === "Accepted").reduce((a, b) => a + b.score, 0);
     const finalScore =
-      subs.filter((s) => s.roundId === 4 && s.status === "Accepted").reduce((a, b) => a + b.score, 0) || 0;
+      subs.filter((s) => s.roundId === 4 && s.status === "Accepted").reduce((a, b) => a + b.score, 0);
 
-    const totalScore = quizScore + codingScore + debuggingScore + finalScore;
+    const totalScore = r1Score + codingScore + debuggingScore + finalScore;
 
     const acceptedSubs = subs.filter((s) => s.status === "Accepted").length;
-    const codePassRate = subs.length > 0 ? Math.round((acceptedSubs / subs.length) * 100) : 100;
-    const roundsCompleted = rounds.filter((r) => r.status === "completed").length;
+    const codePassRate = subs.length > 0 ? Math.round((acceptedSubs / subs.length) * 100) : 0;
+    const roundsCompleted = rounds.filter((r) => r.status === "completed" || r.status === "qualified").length;
+
+    // Fetch live leaderboard rank
+    let rank: number | null = null;
+    let totalParticipants = 0;
+    try {
+      const lb = await realtimeDbService.getLeaderboard();
+      if (lb && lb.length > 0) {
+        totalParticipants = lb.length;
+        const found = lb.find((l) => l.userId === userId);
+        if (found) rank = found.rank;
+      }
+    } catch {
+      // default rank 1
+    }
+
+    const qualificationStatus: ParticipantStats["qualificationStatus"] = rounds.some((round) => round.status === "not_qualified")
+      ? "Not Qualified"
+      : rounds.every((round) => ["qualified", "completed"].includes(round.status)) && rounds.length > 0
+      ? "Qualified"
+      : "In Progress";
 
     return {
       totalScore,
-      currentRank: 5,
-      totalParticipants: 540,
-      roundsCompleted: roundsCompleted || 1,
-      totalRounds: 4,
-      qualificationStatus: totalScore >= 200 ? "Qualified" : "In Progress",
-      accuracy: quizSub?.accuracy || 80,
+      currentRank: rank,
+      totalParticipants,
+      roundsCompleted,
+      totalRounds: rounds.length,
+      qualificationStatus,
+      accuracy: quizAccuracy,
       codePassRate,
-      quizScore,
+      quizScore: r1Score,
       codingScore,
       debuggingScore,
       finalScore,
@@ -1625,17 +1773,22 @@ class ParticipantService {
   // 8. Announcements
   public async getAnnouncements(): Promise<AnnouncementItem[]> {
     try {
-      const annCol = collection(db, "announcements");
-      const snap = await getDocs(query(annCol, orderBy("publishedAt", "desc"), limit(10)));
-      if (!snap.empty) {
-        const list: AnnouncementItem[] = [];
-        snap.forEach((d) => list.push({ id: d.id, ...d.data() } as AnnouncementItem));
-        return list;
+      const dbAnnouncements = await realtimeDbService.getAnnouncements();
+      if (dbAnnouncements && dbAnnouncements.length > 0) {
+        return dbAnnouncements.map((a) => ({
+          id: a.id,
+          title: a.title,
+          summary: a.content.slice(0, 100) + (a.content.length > 100 ? "..." : ""),
+          content: a.content,
+          priority: a.priority === "high" ? "urgent" : "normal",
+          publishedAt: a.timestamp,
+          category: "general",
+        }));
       }
-    } catch {
-      // fallback
+    } catch (err) {
+      console.warn("[getAnnouncements] RTDB read error:", err);
     }
-    return INITIAL_ANNOUNCEMENTS;
+    return [];
   }
 
   // 9. Notifications
@@ -1645,10 +1798,9 @@ class ParticipantService {
       if (stored) {
         return JSON.parse(stored);
       }
-      localStorage.setItem(this.localKey("notifications"), JSON.stringify(INITIAL_NOTIFICATIONS));
-      return INITIAL_NOTIFICATIONS;
+      return [];
     } catch {
-      return INITIAL_NOTIFICATIONS;
+      return [];
     }
   }
 
@@ -1667,59 +1819,36 @@ class ParticipantService {
   // 10. Participant Profile
   public async getProfile(uid: string): Promise<ParticipantProfileData | null> {
     try {
-      const stored = localStorage.getItem(this.localKey(`profile_${uid}`));
-      if (stored) return JSON.parse(stored);
-
-      const userDocRef = doc(db, "users", uid);
-      const snap = await getDoc(userDocRef);
+      const snap = await getDoc(doc(db, "users", uid));
       if (snap.exists()) {
-        return snap.data() as ParticipantProfileData;
+        const u = snap.data();
+        return {
+          displayName: u.displayName || "",
+          email: u.email || "",
+          uid,
+          institution: u.institution || "",
+          bio: u.bio || "",
+          github: u.github || "",
+          createdAt: u.createdAt || "",
+          emailVerified: Boolean(u.emailVerified),
+          role: u.role || "participant",
+          contestStatus: u.accountStatus === "disqualified" ? "disqualified" : u.accountStatus === "completed" ? "completed" : "active",
+        };
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      console.warn("[getProfile] RTDB fetch error:", err);
     }
 
-    return {
-      displayName: "Code Fighter",
-      email: "participant@codebattle.dev",
-      uid,
-      institution: "Autonomous Tech Institute",
-      bio: "Competitive programmer & full-stack architect tackling algorithms under pressure.",
-      github: "codefighter",
-      createdAt: "2026-10-18T04:00:00Z",
-      emailVerified: true,
-      role: "participant",
-      contestStatus: "active",
-    };
+    return null;
   }
 
   public async updateProfile(uid: string, data: Partial<ParticipantProfileData>): Promise<void> {
-    const existing = (await this.getProfile(uid)) || {
-      displayName: "Participant",
-      email: "",
-      uid,
-      institution: "",
-      createdAt: new Date().toISOString(),
-      emailVerified: true,
-      role: "participant",
-      contestStatus: "active",
-    };
-
-    const updated = {
-      ...existing,
-      ...data,
+    const { uid: _uid, email: _email, role: _role, emailVerified: _verified, contestStatus: _status, ...editable } = data;
+    await updateDoc(doc(db, "users", uid), {
+      ...editable,
       updatedAt: new Date().toISOString(),
-    };
-
-    localStorage.setItem(this.localKey(`profile_${uid}`), JSON.stringify(updated));
-
-    try {
-      const userDocRef = doc(db, "users", uid);
-      await setDoc(userDocRef, updated, { merge: true });
-    } catch {
-      // local sync succeeded
-    }
+    });
   }
 }
-
 export const participantService = new ParticipantService();
+export default participantService;

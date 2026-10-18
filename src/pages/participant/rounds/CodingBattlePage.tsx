@@ -9,11 +9,14 @@ import {
   Loader2,
   Cpu,
   ArrowLeft,
+  Sparkles,
+  Bot,
+  X,
 } from "lucide-react";
 import {
-  CODING_PROBLEMS,
   participantService,
 } from "../../../services/participantService";
+import { realtimeDbService } from "../../../services/realtimeDbService";
 import type { CodingProblem } from "../../../types/participant";
 import { CodeEditor } from "../../../components/participant/CodeEditor";
 import { useAuth } from "../../../context/AuthContext";
@@ -22,6 +25,9 @@ import { RoundAccessGuard } from "../../../components/participant/RoundAccessGua
 
 const CodingBattleWorkspace: React.FC = () => {
   const { user } = useAuth();
+  const [problems, setProblems] = useState<CodingProblem[]>([]);
+  const [isLoadingProblems, setIsLoadingProblems] = useState(true);
+  const [problemError, setProblemError] = useState<string | null>(null);
   const [selectedProblemIndex, setSelectedProblemIndex] = useState(0);
   const [language, setLanguage] = useState<string>("python");
   const [code, setCode] = useState<string>("");
@@ -44,14 +50,36 @@ const CodingBattleWorkspace: React.FC = () => {
   const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
   const [submissionSuccess, setSubmissionSuccess] = useState<string | null>(null);
 
-  const problem: CodingProblem = CODING_PROBLEMS[selectedProblemIndex] || CODING_PROBLEMS[0];
+  // AI Mentor state (Groq & Gemini)
+  const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+  const [aiContent, setAiContent] = useState<string>("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiType, setAiType] = useState<"hint" | "explanation">("hint");
+
+  useEffect(() => {
+    participantService.getRoundProblems("coding")
+      .then(setProblems)
+      .catch(() => setProblemError("Coding challenges are unavailable right now."))
+      .finally(() => setIsLoadingProblems(false));
+  }, []);
+
+  const problem = problems[selectedProblemIndex] as CodingProblem | undefined;
 
   // Initialize or reset starter code when problem or language changes
   useEffect(() => {
+    if (!problem) return;
     const starter = problem.starterCode[language] || problem.starterCode["python"] || "";
     setCode(starter);
     setTestResults(null);
   }, [problem, language]);
+
+  if (isLoadingProblems) {
+    return <div className="flex min-h-[40vh] items-center justify-center text-text-secondary">Loading coding challenges...</div>;
+  }
+
+  if (problemError || !problem) {
+    return <div className="flex min-h-[40vh] items-center justify-center text-text-secondary">{problemError || "No coding challenges are published."}</div>;
+  }
 
   const handleRunSampleTests = async () => {
     setIsRunningTests(true);
@@ -61,6 +89,44 @@ const CodingBattleWorkspace: React.FC = () => {
       setActiveTab("tests");
     } finally {
       setIsRunningTests(false);
+    }
+  };
+
+  const handleRequestAiHint = async () => {
+    setAiLoading(true);
+    setAiType("hint");
+    setIsAiModalOpen(true);
+    try {
+      const hint = await realtimeDbService.requestAiHint({
+        problemTitle: problem.title,
+        problemStatement: problem.statement,
+        currentCode: code,
+        errorMessage: testResults && !testResults.passed ? testResults.compilerOutput : undefined,
+      });
+      setAiContent(hint);
+    } catch {
+      setAiContent("Examine the problem constraints and edge cases. Ensure boundary checks prevent index overflow.");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleExplainError = async () => {
+    if (!testResults) return;
+    setAiLoading(true);
+    setAiType("explanation");
+    setIsAiModalOpen(true);
+    try {
+      const explanation = await realtimeDbService.requestAiExplanation({
+        code,
+        compilerOutput: testResults.compilerOutput,
+        language,
+      });
+      setAiContent(explanation);
+    } catch {
+      setAiContent("Review the compiler error output for line-specific syntax or memory mismatches.");
+    } finally {
+      setAiLoading(false);
     }
   };
 
@@ -121,7 +187,7 @@ const CodingBattleWorkspace: React.FC = () => {
 
         {/* Problem selector tabs */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
-          {CODING_PROBLEMS.map((p, idx) => (
+          {problems.map((p, idx) => (
             <button
               key={p.id}
               onClick={() => setSelectedProblemIndex(idx)}
@@ -263,6 +329,22 @@ const CodingBattleWorkspace: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-3">
+              {/* Ask AI Mentor */}
+              <button
+                type="button"
+                onClick={handleRequestAiHint}
+                disabled={isRunningTests || isSubmitting || aiLoading}
+                className="inline-flex items-center gap-2 rounded-xl border border-purple-500/40 bg-purple-500/10 px-3.5 py-2.5 text-xs font-bold text-purple-300 hover:bg-purple-500/20 transition-all cursor-pointer disabled:opacity-50"
+                title="Get algorithmic guidance from Groq / Gemini"
+              >
+                {aiLoading && aiType === "hint" ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-purple-400" />
+                ) : (
+                  <Sparkles className="h-4 w-4 text-purple-400" />
+                )}
+                <span>AI Hint</span>
+              </button>
+
               {/* Run Sample Tests */}
               <button
                 type="button"
@@ -298,29 +380,43 @@ const CodingBattleWorkspace: React.FC = () => {
           {/* Test Results & Output Panel */}
           <div className="rounded-2xl border border-border bg-bg-card/60 p-4 space-y-4">
             {/* Tabs */}
-            <div className="flex items-center gap-2 border-b border-border pb-3">
-              <button
-                onClick={() => setActiveTab("tests")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
-                  activeTab === "tests"
-                    ? "bg-violet-primary/20 text-violet-light border border-violet-primary/30"
-                    : "text-text-muted hover:text-text-primary"
-                }`}
-              >
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                <span>Test Verdicts</span>
-              </button>
-              <button
-                onClick={() => setActiveTab("output")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
-                  activeTab === "output"
-                    ? "bg-violet-primary/20 text-violet-light border border-violet-primary/30"
-                    : "text-text-muted hover:text-text-primary"
-                }`}
-              >
-                <Terminal className="h-3.5 w-3.5" />
-                <span>Compiler &amp; Logs</span>
-              </button>
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setActiveTab("tests")}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                    activeTab === "tests"
+                      ? "bg-violet-primary/20 text-violet-light border border-violet-primary/30"
+                      : "text-text-muted hover:text-text-primary"
+                  }`}
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  <span>Test Verdicts</span>
+                </button>
+                <button
+                  onClick={() => setActiveTab("output")}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                    activeTab === "output"
+                      ? "bg-violet-primary/20 text-violet-light border border-violet-primary/30"
+                      : "text-text-muted hover:text-text-primary"
+                  }`}
+                >
+                  <Terminal className="h-3.5 w-3.5" />
+                  <span>Compiler &amp; Logs</span>
+                </button>
+              </div>
+
+              {testResults && !testResults.passed && (
+                <button
+                  type="button"
+                  onClick={handleExplainError}
+                  disabled={aiLoading}
+                  className="inline-flex items-center gap-1.5 text-xs font-mono text-purple-400 hover:text-purple-300 hover:underline cursor-pointer"
+                >
+                  <Bot className="h-3.5 w-3.5" />
+                  <span>Explain Failure</span>
+                </button>
+              )}
             </div>
 
             {/* Results Content */}
@@ -371,6 +467,53 @@ const CodingBattleWorkspace: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* AI Mentor Dialog */}
+      {isAiModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-lg rounded-2xl border border-purple-500/40 bg-bg-card p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <div className="flex items-center gap-2 text-purple-400 font-bold text-sm">
+                <Sparkles className="h-4 w-4" />
+                <span>{aiType === "hint" ? "AI Mentor — Strategic Hint" : "AI Mentor — Error Analysis"}</span>
+              </div>
+              <button
+                onClick={() => setIsAiModalOpen(false)}
+                className="text-text-muted hover:text-text-primary cursor-pointer p-1 rounded-lg"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="text-xs leading-relaxed text-text-secondary min-h-[100px] flex items-center justify-center">
+              {aiLoading ? (
+                <div className="flex items-center gap-2 text-purple-300 font-mono">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <span>Consulting neural models (Groq / Gemini)...</span>
+                </div>
+              ) : (
+                <div className="space-y-3 w-full">
+                  <div className="p-3.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-200 font-mono text-xs whitespace-pre-wrap">
+                    {aiContent}
+                  </div>
+                  <p className="text-[11px] text-text-muted">
+                    Powered by secure server-side Groq / Gemini. Official test execution is deterministically evaluated by JDoodle.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={() => setIsAiModalOpen(false)}
+                className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs cursor-pointer"
+              >
+                Understood
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Confirmation Modal */}
       <ConfirmDialog

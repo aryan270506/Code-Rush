@@ -1,0 +1,132 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "users": {
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "auth != null && (auth.uid === $uid || root.child('userRoles').child(auth.uid).val() === 'admin' || auth.token.role === 'admin')"
+      }
+    },
+
+    "userRoles": {
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "auth != null && (root.child('userRoles').child(auth.uid).val() === 'admin' || auth.token.role === 'admin')"
+      }
+    },
+
+    "competitions": {
+      ".read": "auth != null",
+      ".write": "auth != null && (root.child('userRoles').child(auth.uid).val() === 'admin' || auth.token.role === 'admin')"
+    },
+
+    "competitionConfig": {
+      ".read": "auth != null",
+      ".write": "auth != null && (root.child('userRoles').child(auth.uid).val() === 'admin' || auth.token.role === 'admin')"
+    },
+
+    "rounds": {
+      ".read": "auth != null",
+      ".write": "auth != null && (root.child('userRoles').child(auth.uid).val() === 'admin' || auth.token.role === 'admin')"
+    },
+
+    "questions": {
+      ".read": "auth != null",
+      ".write": "auth != null && (root.child('userRoles').child(auth.uid).val() === 'admin' || auth.token.role === 'admin')"
+    },
+
+    "questionPrivate": {
+      ".read": "auth != null && (root.child('userRoles').child(auth.uid).val() === 'admin' || auth.token.role === 'admin')",
+      ".write": "auth != null && (root.child('userRoles').child(auth.uid).val() === 'admin' || auth.token.role === 'admin')"
+    },
+
+    "registrations": {
+      "$competitionId": {
+        ".read": "auth != null",
+        "$uid": {
+          ".read": "auth != null && (auth.uid === $uid || root.child('userRoles').child(auth.uid).val() === 'admin' || auth.token.role === 'admin')",
+          ".write": "auth != null && (auth.uid === $uid || root.child('userRoles').child(auth.uid).val() === 'admin' || auth.token.role === 'admin')"
+        }
+      }
+    },
+
+    "roundAttempts": {
+      "$competitionId": {
+        "$roundId": {
+          "$uid": {
+            ".read": "auth != null && (auth.uid === $uid || root.child('userRoles').child(auth.uid).val() === 'admin' || auth.token.role === 'admin')",
+            ".write": "auth != null && (root.child('userRoles').child(auth.uid).val() === 'admin' || auth.token.role === 'admin')"
+          }
+        }
+      }
+    },
+
+    "submissions": {
+      "$competitionId": {
+        "$roundId": {
+          "$uid": {
+            ".read": "auth != null && (auth.uid === $uid || root.child('userRoles').child(auth.uid).val() === 'admin' || auth.token.role === 'admin')",
+            ".write": "auth != null && (root.child('userRoles').child(auth.uid).val() === 'admin' || auth.token.role === 'admin')"
+          }
+        }
+      }
+    },
+
+    "participantProgress": {
+      "$competitionId": {
+        "$uid": {
+          ".read": "auth != null && (auth.uid === $uid || root.child('userRoles').child(auth.uid).val() === 'admin' || auth.token.role === 'admin')",
+          ".write": "auth != null && (root.child('userRoles').child(auth.uid).val() === 'admin' || auth.token.role === 'admin')"
+        }
+      }
+    },
+
+    "scores": {
+      "$competitionId": {
+        ".read": "auth != null",
+        "$uid": {
+          ".write": "auth != null && (root.child('userRoles').child(auth.uid).val() === 'admin' || auth.token.role === 'admin')"
+        }
+      }
+    },
+
+    "qualification": {
+      "$competitionId": {
+        ".read": "auth != null",
+        "$roundId": {
+          "$uid": {
+            ".write": "auth != null && (root.child('userRoles').child(auth.uid).val() === 'admin' || auth.token.role === 'admin')"
+          }
+        }
+      }
+    },
+
+    "leaderboards": {
+      "$competitionId": {
+        ".read": "auth != null",
+        ".write": "auth != null && (root.child('userRoles').child(auth.uid).val() === 'admin' || auth.token.role === 'admin')"
+      }
+    },
+
+    "announcements": {
+      "$competitionId": {
+        ".read": "auth != null",
+        ".write": "auth != null && (root.child('userRoles').child(auth.uid).val() === 'admin' || auth.token.role === 'admin')"
+      }
+    },
+
+    "notifications": {
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || root.child('userRoles').child(auth.uid).val() === 'admin' || auth.token.role === 'admin')",
+        ".write": "auth != null && (auth.uid === $uid || root.child('userRoles').child(auth.uid).val() === 'admin' || auth.token.role === 'admin')"
+      }
+    },
+
+    "auditLogs": {
+      ".read": "auth != null && (root.child('userRoles').child(auth.uid).val() === 'admin' || auth.token.role === 'admin')",
+      ".write": "auth != null && (root.child('userRoles').child(auth.uid).val() === 'admin' || auth.token.role === 'admin')"
+    }
+  }
+}

@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AdminSidebar } from './AdminSidebar';
 import { AdminHeader } from './AdminHeader';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { useAuth } from '../../../hooks/useAuth';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -15,24 +18,54 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   subtitle,
   action,
 }) => {
+  const navigate = useNavigate();
+  const { logout } = useAuth();
+
   const [collapsed, setCollapsed] = useState<boolean>(() => {
-    return localStorage.getItem('cb_admin_sidebar_collapsed') === 'true';
+    try {
+      return localStorage.getItem('cb_admin_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
   });
   const [mobileOpen, setMobileOpen] = useState<boolean>(false);
+  const [isLogoutOpen, setIsLogoutOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
-  const handleSetCollapsed = (val: boolean) => {
-    setCollapsed(val);
-    localStorage.setItem('cb_admin_sidebar_collapsed', String(val));
+  const handleSetCollapsed = (val: boolean | ((prev: boolean) => boolean)) => {
+    setCollapsed((prev) => {
+      const next = typeof val === 'function' ? val(prev) : val;
+      try {
+        localStorage.setItem('cb_admin_sidebar_collapsed', String(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
+
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    try {
+      await logout();
+      setIsLogoutOpen(false);
+      navigate('/login', { replace: true });
+    } catch (err) {
+      console.error('Logout error:', err);
+    } finally {
+      setLoggingOut(false);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-[#080A18] text-[#F8FAFC] flex font-sans antialiased selection:bg-[#6D28D9]/40 selection:text-[#F8FAFC]">
-      {/* Sidebar */}
+    <div className="min-h-screen bg-bg-primary text-text-primary flex font-sans antialiased selection:bg-violet-primary/30 selection:text-white">
+      {/* Shared Reusable Sidebar for Admin */}
       <AdminSidebar
         collapsed={collapsed}
         setCollapsed={handleSetCollapsed}
         mobileOpen={mobileOpen}
         setMobileOpen={setMobileOpen}
+        onOpenLogoutDialog={() => setIsLogoutOpen(true)}
       />
 
       {/* Main Content Area */}
@@ -51,13 +84,13 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
         {/* Page Body */}
         <main className="flex-1 pt-20 px-4 sm:px-6 lg:px-8 pb-12 max-w-7xl w-full mx-auto">
           {/* Reusable Page Header */}
-          <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-[#272B49]">
+          <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-border">
             <div>
-              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[#F8FAFC]">
+              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-text-primary">
                 {title}
               </h1>
               {subtitle && (
-                <p className="text-xs sm:text-sm text-[#A5ADCA] mt-1 leading-relaxed">
+                <p className="text-xs sm:text-sm text-text-secondary mt-1 leading-relaxed">
                   {subtitle}
                 </p>
               )}
@@ -69,6 +102,21 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
           {children}
         </main>
       </div>
+
+      {/* Logout Confirmation Modal */}
+      <ConfirmDialog
+        isOpen={isLogoutOpen}
+        title="Sign Out of Operations Console"
+        description="Are you sure you want to end your administrative session?"
+        confirmLabel="Sign Out"
+        cancelLabel="Stay Signed In"
+        variant="danger"
+        loading={loggingOut}
+        onConfirm={handleLogout}
+        onClose={() => setIsLogoutOpen(false)}
+      />
     </div>
   );
 };
+
+export default AdminLayout;

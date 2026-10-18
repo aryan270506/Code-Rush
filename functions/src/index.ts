@@ -3,6 +3,11 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { createAndStoreOtp, validateOtp } from "./auth/emailOtp";
 import { sendOtpEmail } from "./email/emailProvider";
 import { assignAdminRole } from "./admin/setAdminRole";
+import { evaluateQuizSubmission } from "./competition/quizEvaluator";
+import { evaluateCodeSubmission } from "./competition/codeEvaluator";
+import { generateAiHint, explainCodeError, generateAiQuestion } from "./ai/aiService";
+import { recalculateLeaderboard } from "./competition/leaderboard";
+import { seedCompetitionData } from "./admin/seedDatabase";
 
 // Initialize Firebase Admin singleton
 if (!admin.apps.length) {
@@ -219,5 +224,190 @@ export const setAdminRole = onCall(
     }
 
     return await assignAdminRole(targetEmailOrUid);
+  }
+);
+
+/**
+ * Cloud Function: submitQuiz
+ * Authoritative backend grading of Quiz Battle.
+ */
+export const submitQuiz = onCall(
+  { cors: true },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Authentication required to submit quiz.");
+    }
+
+    const { competitionId, answers, timeSpentSeconds, userName } = request.data || {};
+    if (!answers || typeof answers !== "object") {
+      throw new HttpsError("invalid-argument", "Answers object is required.");
+    }
+
+    const result = await evaluateQuizSubmission({
+      competitionId,
+      userId: request.auth.uid,
+      userName: userName || request.auth.token.name || "Competitor",
+      userEmail: request.auth.token.email,
+      answers,
+      timeSpentSeconds,
+    });
+
+    return { success: true, result };
+  }
+);
+
+/**
+ * Cloud Function: submitCode
+ * Authoritative backend code execution via JDoodle and scoring for Coding, Debugging, and Final battles.
+ */
+export const submitCode = onCall(
+  { cors: true },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Authentication required to submit code.");
+    }
+
+    const { competitionId, roundSlug, problemId, problemTitle, language, code, userName } = request.data || {};
+    if (!code || typeof code !== "string" || !problemId || !language) {
+      throw new HttpsError("invalid-argument", "Missing required code, problemId, or language.");
+    }
+
+    const result = await evaluateCodeSubmission({
+      competitionId,
+      userId: request.auth.uid,
+      userName: userName || request.auth.token.name || "Competitor",
+      userEmail: request.auth.token.email,
+      roundSlug: roundSlug || "coding",
+      problemId,
+      problemTitle,
+      language,
+      code,
+    });
+
+    return { success: true, result };
+  }
+);
+
+/**
+ * Cloud Function: generateHint
+ * Groq & Gemini powered AI hint generation.
+ */
+export const generateHint = onCall(
+  { cors: true },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Authentication required for AI hints.");
+    }
+
+    const { problemTitle, problemStatement, currentCode, errorMessage } = request.data || {};
+    if (!problemTitle || !problemStatement) {
+      throw new HttpsError("invalid-argument", "problemTitle and problemStatement are required.");
+    }
+
+    const hint = await generateAiHint({
+      problemTitle,
+      problemStatement,
+      currentCode: currentCode || "",
+      errorMessage,
+    });
+
+    return { success: true, hint };
+  }
+);
+
+/**
+ * Cloud Function: explainError
+ * Explains compiler / runtime error in code.
+ */
+export const explainError = onCall(
+  { cors: true },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Authentication required.");
+    }
+
+    const { code, compilerOutput, language } = request.data || {};
+    if (!code || !compilerOutput) {
+      throw new HttpsError("invalid-argument", "code and compilerOutput are required.");
+    }
+
+    const explanation = await explainCodeError({
+      code,
+      compilerOutput,
+      language: language || "python",
+    });
+
+    return { success: true, explanation };
+  }
+);
+
+/**
+ * Cloud Function: generateQuestion
+ * Admin-only AI drafting of competition questions.
+ */
+export const generateQuestion = onCall(
+  { cors: true },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Authentication required.");
+    }
+
+    const isCallerAdmin = request.auth.token.role === "admin";
+    if (!isCallerAdmin) {
+      const userSnap = await admin.database().ref(`userRoles/${request.auth.uid}`).once("value");
+      if (userSnap.val() !== "admin") {
+        throw new HttpsError("permission-denied", "Admin role required.");
+      }
+    }
+
+    const { topic, roundType, difficulty } = request.data || {};
+    const questionDraft = await generateAiQuestion({
+      topic: topic || "Dynamic Programming",
+      roundType: roundType || "coding",
+      difficulty: difficulty || "medium",
+    });
+
+    return { success: true, questionDraft };
+  }
+);
+
+/**
+ * Cloud Function: recalculateLeaderboardManual
+ * Recalculates leaderboard for a competition.
+ */
+export const recalculateLeaderboardManual = onCall(
+  { cors: true },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Authentication required.");
+    }
+
+    const { competitionId } = request.data || {};
+    const leaderboard = await recalculateLeaderboard(competitionId || "comp-2026-spring");
+    return { success: true, leaderboard };
+  }
+);
+
+/**
+ * Cloud Function: seedDatabase
+ * Initializes default Code Battle competition structure if empty.
+ */
+export const seedDatabase = onCall(
+  { cors: true },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Authentication required.");
+    }
+
+    const isAdmin = request.auth.token.role === "admin";
+    if (!isAdmin) {
+      const userDoc = await admin.firestore().collection("users").doc(request.auth.uid).get();
+      if (userDoc.data()?.role !== "admin") {
+        throw new HttpsError("permission-denied", "Admin role required.");
+      }
+    }
+
+    const result = await seedCompetitionData();
+    return result;
   }
 );
