@@ -7,7 +7,6 @@ import {
   Swords,
   TrendingUp,
   Award,
-  Shield,
   BarChart3,
   Target,
   Scale,

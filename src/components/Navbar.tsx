@@ -1,11 +1,16 @@
 import { useState, useEffect } from "react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, Zap } from "lucide-react";
+import { Menu, X, Zap, User, LogOut } from "lucide-react";
 import { navLinks } from "../data/competition";
+import { useAuth } from "../hooks/useAuth";
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const { user, profile, logout } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -15,9 +20,15 @@ export default function Navbar() {
 
   const handleNav = (href: string) => {
     setIsOpen(false);
+    if (location.pathname !== "/") {
+      navigate("/" + href);
+      return;
+    }
     const el = document.querySelector(href);
     el?.scrollIntoView({ behavior: "smooth" });
   };
+
+  const dashboardRoute = profile?.role === "admin" ? "/admin/dashboard" : "/participant/dashboard";
 
   return (
     <nav
@@ -30,11 +41,12 @@ export default function Navbar() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between lg:h-18">
           {/* Logo */}
-          <a
-            href="#home"
-            onClick={(e) => {
-              e.preventDefault();
-              handleNav("#home");
+          <Link
+            to="/"
+            onClick={() => {
+              if (location.pathname === "/") {
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }
             }}
             className="group flex items-center gap-2.5"
           >
@@ -44,7 +56,7 @@ export default function Navbar() {
             <span className="text-lg font-bold tracking-tight text-text-primary">
               Code<span className="text-violet-light">Battle</span>
             </span>
-          </a>
+          </Link>
 
           {/* Desktop Links */}
           <div className="hidden items-center gap-1 lg:flex">
@@ -63,20 +75,41 @@ export default function Navbar() {
             ))}
           </div>
 
-          {/* Desktop CTA */}
+          {/* Desktop Auth State / CTA */}
           <div className="hidden items-center gap-3 lg:flex">
-            <button
-              onClick={() => alert("Login routing placeholder")}
-              className="cursor-pointer rounded-lg px-4 py-2 text-sm font-medium text-text-secondary transition-colors hover:text-text-primary"
-            >
-              Login
-            </button>
-            <button
-              onClick={() => handleNav("#cta")}
-              className="cursor-pointer rounded-lg bg-violet-primary px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-primary/25 transition-all hover:bg-violet-light hover:shadow-violet-primary/40"
-            >
-              Join the Battle
-            </button>
+            {user ? (
+              <div className="flex items-center gap-3">
+                <Link
+                  to={dashboardRoute}
+                  className="inline-flex items-center gap-2 rounded-lg border border-border bg-bg-card/60 px-3.5 py-2 text-xs font-semibold text-text-primary hover:border-violet-primary/40 transition-colors"
+                >
+                  <User className="h-3.5 w-3.5 text-violet-light" />
+                  <span>Dashboard</span>
+                </Link>
+                <button
+                  onClick={() => logout()}
+                  title="Sign Out"
+                  className="cursor-pointer rounded-lg p-2 text-text-muted hover:text-danger hover:bg-danger/10 transition-colors"
+                >
+                  <LogOut className="h-4 w-4" />
+                </button>
+              </div>
+            ) : (
+              <>
+                <Link
+                  to="/login"
+                  className="cursor-pointer rounded-lg px-4 py-2 text-sm font-medium text-text-secondary transition-colors hover:text-text-primary"
+                >
+                  Login
+                </Link>
+                <Link
+                  to="/signup"
+                  className="cursor-pointer rounded-lg bg-violet-primary px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-primary/25 transition-all hover:bg-violet-light hover:shadow-violet-primary/40"
+                >
+                  Join the Battle
+                </Link>
+              </>
+            )}
           </div>
 
           {/* Mobile toggle */}
@@ -114,24 +147,43 @@ export default function Navbar() {
                 </a>
               ))}
               <div className="flex flex-col gap-2 pt-3 border-t border-border">
-                <button
-                  onClick={() => {
-                    setIsOpen(false);
-                    alert("Login routing placeholder");
-                  }}
-                  className="cursor-pointer rounded-lg px-4 py-3 text-sm font-medium text-text-secondary transition-colors hover:text-text-primary text-left"
-                >
-                  Login
-                </button>
-                <button
-                  onClick={() => {
-                    setIsOpen(false);
-                    handleNav("#cta");
-                  }}
-                  className="cursor-pointer rounded-lg bg-violet-primary px-4 py-3 text-sm font-semibold text-white text-center"
-                >
-                  Join the Battle
-                </button>
+                {user ? (
+                  <>
+                    <Link
+                      to={dashboardRoute}
+                      onClick={() => setIsOpen(false)}
+                      className="cursor-pointer rounded-lg bg-violet-primary/20 border border-violet-primary/40 px-4 py-3 text-sm font-semibold text-violet-light text-center"
+                    >
+                      Go to Dashboard
+                    </Link>
+                    <button
+                      onClick={() => {
+                        setIsOpen(false);
+                        logout();
+                      }}
+                      className="cursor-pointer rounded-lg px-4 py-2.5 text-xs font-medium text-danger text-center"
+                    >
+                      Sign Out
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <Link
+                      to="/login"
+                      onClick={() => setIsOpen(false)}
+                      className="cursor-pointer rounded-lg px-4 py-3 text-sm font-medium text-text-secondary transition-colors hover:text-text-primary text-center border border-border bg-bg-card/40"
+                    >
+                      Login
+                    </Link>
+                    <Link
+                      to="/signup"
+                      onClick={() => setIsOpen(false)}
+                      className="cursor-pointer rounded-lg bg-violet-primary px-4 py-3 text-sm font-semibold text-white text-center"
+                    >
+                      Join the Battle
+                    </Link>
+                  </>
+                )}
               </div>
             </div>
           </motion.div>

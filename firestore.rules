@@ -1,0 +1,71 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.role == 'admin' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
+    }
+
+    // -------------------------------------------------------------------------
+    // User Profiles Collection: users/{userId}
+    // -------------------------------------------------------------------------
+    match /users/{userId} {
+      // Users can read their own profile; Administrators can read all participant profiles
+      allow read: if isOwner(userId) || isAdmin();
+
+      // Creation is strictly restricted to:
+      // 1. Initial participant registration with role "participant" and emailVerified == false
+      // 2. Administrators or Firebase Cloud Functions (Admin SDK)
+      allow create: if (
+        isOwner(userId) &&
+        request.resource.data.role == 'participant' &&
+        request.resource.data.emailVerified == false &&
+        request.resource.data.uid == userId
+      ) || isAdmin();
+
+      // Participants CANNOT modify their own role, emailVerified, accountStatus, or UID.
+      // Modifying these fields is forbidden via client SDK calls and can only be performed
+      // by trusted Cloud Functions using the Firebase Admin SDK.
+      allow update: if (
+        isOwner(userId) &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'role',
+          'emailVerified',
+          'accountStatus',
+          'uid',
+          'email'
+        ])
+      ) || isAdmin();
+
+      // Disallow user profile deletion from public clients
+      allow delete: if isAdmin();
+    }
+
+    // -------------------------------------------------------------------------
+    // Private OTP & Verification Store: _email_otps/{emailHash}
+    // -------------------------------------------------------------------------
+    // CRITICAL: NEVER allow client reads or writes to the OTP collection.
+    // Only the Firebase Admin SDK in Cloud Functions has access to this data.
+    match /_email_otps/{document=**} {
+      allow read, write: if false;
+    }
+
+    // Default deny all other collections
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

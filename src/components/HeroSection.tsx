@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ArrowRight, ChevronRight, Zap, Clock, BarChart3 } from "lucide-react";
 
@@ -52,13 +53,13 @@ export default function HeroSection() {
             </p>
 
             <div className="mt-8 flex flex-wrap items-center justify-center gap-4 lg:justify-start">
-              <button
-                onClick={() => handleScroll("#cta")}
+              <Link
+                to="/signup"
                 className="group cursor-pointer inline-flex items-center gap-2 rounded-xl bg-violet-primary px-7 py-3.5 text-sm font-semibold text-white shadow-lg shadow-violet-primary/25 transition-all hover:bg-violet-light hover:shadow-violet-primary/40 hover:gap-3"
               >
                 Join the Battle
                 <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-              </button>
+              </Link>
               <button
                 onClick={() => handleScroll("#competition")}
                 className="group cursor-pointer inline-flex items-center gap-2 rounded-xl border border-border bg-bg-card/50 px-7 py-3.5 text-sm font-semibold text-text-primary transition-all hover:border-violet-primary/40 hover:bg-bg-card"

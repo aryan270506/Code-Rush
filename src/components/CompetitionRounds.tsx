@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { rounds } from "../data/competition";
-import type { LucideIcon } from "lucide-react";
+import React from "react";
+type IconType = React.ComponentType<{ className?: string }>;
 
 export default function CompetitionRounds() {
   return (
@@ -43,7 +44,7 @@ interface RoundCardProps {
   round: {
     number: number;
     title: string;
-    icon: LucideIcon;
+    icon: IconType;
     description: string;
     tags: string[];
     color: "violet" | "cyan";

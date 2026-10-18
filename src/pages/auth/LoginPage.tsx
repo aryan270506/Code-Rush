@@ -1,0 +1,177 @@
+import React, { useState } from "react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Mail, ArrowRight, Loader2, AlertCircle } from "lucide-react";
+import AuthLayout from "../../components/auth/AuthLayout";
+import AuthFormField from "../../components/auth/AuthFormField";
+import PasswordField from "../../components/auth/PasswordField";
+import { validateEmail } from "../../utils/validation";
+import { authService } from "../../services/authService";
+
+export default function LoginPage() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
+  const [errors, setErrors] = useState<{ email?: string; password?: string; general?: string }>({});
+  const [loading, setLoading] = useState(false);
+
+  // Check if redirected from sign-up or verification with notice
+  const queryParams = new URLSearchParams(location.search);
+  const infoNotice = queryParams.get("notice");
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (loading) return;
+
+    // Validate inputs
+    const newErrors: { email?: string; password?: string; general?: string } = {};
+    const emailErr = validateEmail(email);
+    if (emailErr) newErrors.email = emailErr;
+    if (!password) newErrors.password = "Please enter your password.";
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
+    setErrors({});
+    setLoading(true);
+
+    try {
+      const { user, profile } = await authService.login(email, password);
+
+      // Check email verification status
+      const isVerified = user.emailVerified || profile?.emailVerified;
+      if (!isVerified) {
+        // Redirect to email verification page with uid and email
+        navigate(`/verify-email?email=${encodeURIComponent(user.email || email)}&uid=${user.uid}`, {
+          replace: true,
+        });
+        return;
+      }
+
+      // Role-based redirect verified by server-side Firestore profile
+      const userRole = profile?.role || "participant";
+      if (userRole === "admin") {
+        navigate("/admin/dashboard", { replace: true });
+      } else {
+        navigate("/participant/dashboard", { replace: true });
+      }
+    } catch (err: unknown) {
+      console.error("[Login] Authentication error:", err);
+      let errorMsg = "Invalid email or password. Please check your credentials.";
+
+      if (err instanceof Error) {
+        if (err.message.includes("auth/user-not-found") || err.message.includes("auth/wrong-password") || err.message.includes("auth/invalid-credential")) {
+          errorMsg = "Invalid email address or password.";
+        } else if (err.message.includes("auth/too-many-requests")) {
+          errorMsg = "Too many failed attempts. Please reset your password or try again later.";
+        } else if (err.message.includes("auth/user-disabled")) {
+          errorMsg = "This account has been disabled. Please contact the competition organizers.";
+        } else {
+          errorMsg = err.message;
+        }
+      }
+
+      setErrors({ general: errorMsg });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <AuthLayout
+      badge="Sign In"
+      title="Welcome Back"
+      subtitle="Enter your credentials to access your Code Battle competition account."
+      footerText="Don't have an account?"
+      footerLinkText="Create Participant Account"
+      footerLinkHref="/signup"
+    >
+      {infoNotice && (
+        <div className="mb-5 rounded-xl border border-violet-primary/30 bg-violet-primary/10 p-3.5 text-xs text-violet-light">
+          {infoNotice}
+        </div>
+      )}
+
+      {errors.general && (
+        <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-danger/40 bg-danger/10 p-3.5 text-xs text-danger font-medium">
+          <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+          <span>{errors.general}</span>
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+        <AuthFormField
+          id="login-email"
+          label="Email Address"
+          type="email"
+          autoComplete="email"
+          icon={Mail}
+          placeholder="coder@example.com"
+          value={email}
+          onChange={(e) => {
+            setEmail(e.target.value);
+            if (errors.email) setErrors((prev) => ({ ...prev, email: undefined }));
+          }}
+          error={errors.email}
+          disabled={loading}
+        />
+
+        <PasswordField
+          id="login-password"
+          label="Password"
+          autoComplete="current-password"
+          placeholder="••••••••"
+          value={password}
+          onChange={(e) => {
+            setPassword(e.target.value);
+            if (errors.password) setErrors((prev) => ({ ...prev, password: undefined }));
+          }}
+          error={errors.password}
+          disabled={loading}
+        />
+
+        <div className="flex items-center justify-between text-xs pt-1">
+          <label className="flex items-center gap-2 cursor-pointer select-none text-text-secondary hover:text-text-primary">
+            <input
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              disabled={loading}
+              className="h-3.5 w-3.5 rounded border-border bg-bg-secondary text-violet-primary focus:ring-1 focus:ring-violet-primary"
+            />
+            <span>Remember me</span>
+          </label>
+
+          <Link
+            to="/forgot-password"
+            className="font-medium text-violet-light hover:text-white transition-colors"
+          >
+            Forgot password?
+          </Link>
+        </div>
+
+        <button
+          type="submit"
+          disabled={loading}
+          className="group cursor-pointer mt-2 w-full flex items-center justify-center gap-2 rounded-xl bg-violet-primary py-3 px-4 text-sm font-semibold text-white shadow-lg shadow-violet-primary/25 transition-all hover:bg-violet-light hover:shadow-violet-primary/40 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {loading ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Signing In...</span>
+            </>
+          ) : (
+            <>
+              <span>Sign In</span>
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+            </>
+          )}
+        </button>
+      </form>
+    </AuthLayout>
+  );
+}
