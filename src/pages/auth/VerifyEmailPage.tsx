@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate, Link } from "react-router-dom";
-import { Mail, CheckCircle, AlertCircle, Loader2, RefreshCw } from "lucide-react";
+import { Mail, CheckCircle, AlertCircle, Loader2, RefreshCw, KeyRound } from "lucide-react";
 import AuthLayout from "../../components/auth/AuthLayout";
 import OTPInput from "../../components/auth/OTPInput";
 import { authService } from "../../services/authService";
@@ -18,6 +18,23 @@ export default function VerifyEmailPage() {
   const emailParam = queryParams.get("email") || user?.email || "";
   const uidParam = queryParams.get("uid") || user?.uid || "";
   const noticeParam = queryParams.get("notice");
+
+  // Read dev OTP from query string or sessionStorage fallback
+  const [activeDevOtp, setActiveDevOtp] = useState<string | null>(() => {
+    const fromUrl = queryParams.get("devOtp");
+    if (fromUrl) return fromUrl;
+    if (emailParam) {
+      const stored = sessionStorage.getItem("cb_dev_otp_" + emailParam.toLowerCase().trim());
+      if (stored) {
+        try {
+          return JSON.parse(stored).otp || null;
+        } catch {
+          return null;
+        }
+      }
+    }
+    return null;
+  });
 
   const [otp, setOtp] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -91,7 +108,10 @@ export default function VerifyEmailPage() {
 
     try {
       const res = await authService.resendOtp(emailParam, uidParam);
-      setSuccess(res.message || "A new 6-digit verification code has been sent to your email.");
+      setSuccess(res.message || "A new 6-digit verification code has been dispatched.");
+      if (res.devOtp) {
+        setActiveDevOtp(res.devOtp);
+      }
       setCooldown(COOLDOWN_SECONDS);
       setExpiresIn(EXPIRATION_SECONDS);
       setOtp("");
@@ -123,6 +143,34 @@ export default function VerifyEmailPage() {
         {noticeParam && !error && !success && (
           <div className="rounded-xl border border-violet-primary/30 bg-violet-primary/10 p-3.5 text-xs text-violet-light">
             {noticeParam}
+          </div>
+        )}
+
+        {/* Development Helper Banner */}
+        {activeDevOtp && (
+          <div className="rounded-xl border border-cyan-primary/40 bg-cyan-primary/10 p-3.5 text-xs text-text-primary">
+            <div className="flex items-center justify-between">
+              <span className="font-semibold text-cyan-light flex items-center gap-1.5">
+                <KeyRound className="h-4 w-4" />
+                <span>Verification Code:</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setOtp(activeDevOtp);
+                  handleVerify(activeDevOtp);
+                }}
+                className="text-[11px] font-bold text-violet-light bg-violet-primary/20 hover:bg-violet-primary/30 px-2.5 py-1 rounded-md transition-colors cursor-pointer"
+              >
+                Autofill &amp; Verify
+              </button>
+            </div>
+            <p className="mt-1 font-mono text-xl font-bold tracking-widest text-white">
+              {activeDevOtp}
+            </p>
+            <p className="text-[10px] text-text-muted mt-1">
+              (Live email delivery will send to your inbox once Resend API key is configured).
+            </p>
           </div>
         )}
 

@@ -48,13 +48,14 @@ export default function SignupPage() {
 
     try {
       // Register participant (strictly role 'participant')
-      const { user, message } = await authService.register(email, password, fullName);
+      const { user, message, devOtp } = await authService.register(email, password, fullName);
 
       // Navigate to OTP verification page
+      const devOtpQuery = devOtp ? `&devOtp=${encodeURIComponent(devOtp)}` : "";
       navigate(
         `/verify-email?email=${encodeURIComponent(user.email || email)}&uid=${user.uid}&notice=${encodeURIComponent(
           message
-        )}`,
+        )}${devOtpQuery}`,
         { replace: true }
       );
     } catch (err: unknown) {

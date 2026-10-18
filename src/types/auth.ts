@@ -27,6 +27,7 @@ export interface SendOtpResponse {
   success: boolean;
   message: string;
   cooldownSeconds?: number;
+  devOtp?: string;
 }
 
 export interface VerifyOtpResponse {
