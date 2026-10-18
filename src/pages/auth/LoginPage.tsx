@@ -26,7 +26,7 @@ export default function LoginPage() {
   const handleDemoClick = (role: "participant" | "admin") => {
     loginDemo(role);
     if (role === "admin") {
-      navigate("/admin/dashboard", { replace: true });
+      navigate("/admin", { replace: true });
     } else {
       navigate("/participant/dashboard", { replace: true });
     }

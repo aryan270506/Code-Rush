@@ -9,6 +9,24 @@
   --color-border: #1e1e4a;
   --color-border-glow: #7c3aed40;
 
+  /* Master Prompt Dark-Purple Design System Tokens */
+  --color-admin-bg: #080A18;
+  --color-admin-sidebar: #0D1024;
+  --color-admin-card: #13162D;
+  --color-admin-surface: #191B38;
+  --color-admin-primary: #6D28D9;
+  --color-admin-bright: #7C3AED;
+  --color-admin-active: #4F20D8;
+  --color-admin-glow: #8B5CF6;
+  --color-admin-text-primary: #F8FAFC;
+  --color-admin-text-secondary: #A5ADCA;
+  --color-admin-text-muted: #737D9D;
+  --color-admin-border: #272B49;
+  --color-admin-success: #10B981;
+  --color-admin-warning: #F59E0B;
+  --color-admin-error: #EF4444;
+  --color-admin-info: #3B82F6;
+
   --color-violet-primary: #7c3aed;
   --color-violet-light: #a78bfa;
   --color-violet-dark: #5b21b6;

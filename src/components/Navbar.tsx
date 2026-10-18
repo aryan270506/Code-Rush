@@ -28,7 +28,7 @@ export default function Navbar() {
     el?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const dashboardRoute = profile?.role === "admin" ? "/admin/dashboard" : "/participant/dashboard";
+  const dashboardRoute = profile?.role === "admin" ? "/admin" : "/participant/dashboard";
 
   return (
     <nav
