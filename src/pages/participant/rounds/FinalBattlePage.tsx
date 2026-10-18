@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import {
   Play,
   Send,
@@ -6,6 +7,7 @@ import {
   Crown,
   Cpu,
   Loader2,
+  ArrowLeft,
 } from "lucide-react";
 import {
   FINAL_BATTLE_PROBLEMS,
@@ -14,9 +16,10 @@ import {
 import type { CodingProblem } from "../../../types/participant";
 import { CodeEditor } from "../../../components/participant/CodeEditor";
 import { ConfirmDialog } from "../../../components/participant/ConfirmDialog";
+import { RoundAccessGuard } from "../../../components/participant/RoundAccessGuard";
 import { useAuth } from "../../../context/AuthContext";
 
-export const FinalBattlePage: React.FC = () => {
+const FinalBattleWorkspace: React.FC = () => {
   const { user } = useAuth();
   const [language, setLanguage] = useState<string>("python");
   const [code, setCode] = useState<string>("");
@@ -80,9 +83,18 @@ export const FinalBattlePage: React.FC = () => {
 
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 rounded-full border border-violet-light/40 bg-violet-primary/25 px-3 py-1 text-xs font-semibold text-violet-light">
-              <Crown className="h-3.5 w-3.5 text-warning animate-pulse" />
-              <span>Championship Arena • Final Stage</span>
+            <div className="flex flex-wrap items-center gap-3">
+              <Link
+                to="/participant/competition"
+                className="inline-flex items-center gap-1.5 text-xs text-text-secondary hover:text-white transition-colors"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                <span>Pipeline</span>
+              </Link>
+              <div className="inline-flex items-center gap-2 rounded-full border border-violet-light/40 bg-violet-primary/25 px-3 py-1 text-xs font-semibold text-violet-light">
+                <Crown className="h-3.5 w-3.5 text-warning animate-pulse" />
+                <span>Championship Arena • Final Stage</span>
+              </div>
             </div>
 
             <h1 className="text-2xl sm:text-4xl font-extrabold text-white tracking-tight">
@@ -251,6 +263,14 @@ export const FinalBattlePage: React.FC = () => {
         onCancel={() => setIsSubmitModalOpen(false)}
       />
     </div>
+  );
+};
+
+export const FinalBattlePage: React.FC = () => {
+  return (
+    <RoundAccessGuard roundSlug="final">
+      <FinalBattleWorkspace />
+    </RoundAccessGuard>
   );
 };
 

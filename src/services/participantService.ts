@@ -11,6 +11,8 @@ import {
 import { db } from "../lib/firebase";
 import type {
   CompetitionRound,
+  CompetitionPipelineInfo,
+  RoundStatus,
   QuizQuestion,
   QuizSubmission,
   CodingProblem,
@@ -31,70 +33,79 @@ export const INITIAL_ROUNDS: CompetitionRound[] = [
     name: "Round 1: Quiz Battle",
     shortDescription: "Rapid-fire algorithmic, data structure, and system MCQs.",
     description:
-      "Test core computer science fundamentals, time complexity reasoning, and language quirks under pressure. 15 questions in 20 minutes.",
+      "Test core computer science fundamentals, time complexity reasoning, and language quirks under pressure. 10 questions in 20 minutes.",
     status: "available",
-    maxScore: 150,
-    currentScore: 120,
+    maxScore: 100,
+    currentScore: 0,
     durationMinutes: 20,
-    questionCount: 15,
+    questionCount: 10,
+    qualificationCutoff: 60,
+    requiresQualificationToAdvance: true,
+    unlockConditionText: "Open to all registered participants.",
     startTime: "2026-10-18T10:00:00Z",
     endTime: "2026-10-18T12:00:00Z",
     rules: [
-      "15 multiple-choice questions.",
+      "10 multiple-choice questions.",
       "+10 points per correct answer, -2 points negative marking for wrong answers.",
       "Timer starts immediately upon clicking 'Start Quiz Battle'.",
       "Auto-submits when the countdown reaches 00:00.",
-      "Switching tabs triggers automated proctoring alerts.",
+      "Must score >= 60 points to qualify for Round 2: Coding Battle.",
     ],
     iconName: "Brain",
     color: "violet",
-    isQualified: true,
+    isQualified: false,
   },
   {
     id: 2,
     slug: "coding",
     name: "Round 2: Coding Battle",
-    shortDescription: "Two algorithmic challenges with automated test execution.",
+    shortDescription: "Two algorithmic challenges with automated sandboxed test execution.",
     description:
       "Solve competitive algorithmic challenges using efficient data structures. Code against hidden and sample test cases with strict time/memory constraints.",
-    status: "in_progress",
+    status: "locked",
     maxScore: 200,
-    currentScore: 140,
+    currentScore: 0,
     durationMinutes: 60,
     questionCount: 2,
+    qualificationCutoff: 100,
+    requiresQualificationToAdvance: true,
+    unlockConditionText: "Requires >= 60 points in Round 1: Quiz Battle.",
     startTime: "2026-10-18T12:30:00Z",
     endTime: "2026-10-18T14:30:00Z",
     rules: [
       "Supported languages: Python 3, JavaScript (ES2022), C++17, Java 17.",
       "Evaluation against sample and hidden boundary test cases.",
       "Time limit: 2.0s per test case; Memory limit: 256 MB.",
-      "Partial scoring enabled based on passed test suites.",
+      "Must score >= 100 points to unlock Round 3: Debugging Battle.",
     ],
     iconName: "Code2",
     color: "cyan",
-    isQualified: true,
+    isQualified: false,
   },
   {
     id: 3,
     slug: "debugging",
     name: "Round 3: Debugging Battle",
-    shortDescription: "Diagnose, isolate, and fix logic flaws and race conditions.",
+    shortDescription: "Diagnose, isolate, and fix logic flaws and concurrency race conditions.",
     description:
       "You are handed real-world codebases with subtle bugs: off-by-one errors, recursion depth overflows, and broken invariant checks. Fix and verify all unit tests.",
-    status: "available",
+    status: "locked",
     maxScore: 150,
     currentScore: 0,
     durationMinutes: 45,
     questionCount: 2,
+    qualificationCutoff: 75,
+    requiresQualificationToAdvance: true,
+    unlockConditionText: "Requires >= 100 points in Round 2: Coding Battle.",
     startTime: "2026-10-18T15:00:00Z",
     endTime: "2026-10-18T16:30:00Z",
     rules: [
       "Do not rewrite the entire algorithm; repair the flawed logic cleanly.",
       "All public and edge test cases must pass.",
-      "Code quality and diff cleanliness factor into tiebreaker criteria.",
+      "Must score >= 75 points to unlock Round 4: Final Battle.",
     ],
     iconName: "Bug",
-    color: "violet",
+    color: "amber",
     isQualified: false,
   },
   {
@@ -103,21 +114,24 @@ export const INITIAL_ROUNDS: CompetitionRound[] = [
     name: "Round 4: Final Battle",
     shortDescription: "The Championship Arena — Advanced graph & distributed systems challenge.",
     description:
-      "Only the top 20% of participants unlock this round. Highly challenging algorithmic problems designed to test ultimate engineering prowess.",
+      "The ultimate proving ground for qualified competitors. Highly challenging algorithmic problems designed to test ultimate engineering prowess.",
     status: "locked",
     maxScore: 300,
     currentScore: 0,
     durationMinutes: 90,
     questionCount: 2,
+    qualificationCutoff: 150,
+    requiresQualificationToAdvance: false,
+    unlockConditionText: "Requires >= 75 points in Round 3: Debugging Battle.",
     startTime: "2026-10-18T17:00:00Z",
     endTime: "2026-10-18T19:00:00Z",
     rules: [
-      "Access unlocked only for participants with >= 300 total points from Rounds 1–3.",
+      "Access unlocked only for participants qualified through Rounds 1–3.",
       "Strict zero-tolerance plagiarism checking with AST tree diffing.",
       "Official final standings published following organizer audit.",
     ],
     iconName: "Trophy",
-    color: "cyan",
+    color: "purple",
     isQualified: false,
   },
 ];
@@ -1094,22 +1108,228 @@ class ParticipantService {
     return `cb_participant_${key}`;
   }
 
-  // 1. Competition Rounds
-  public async getRounds(): Promise<CompetitionRound[]> {
-    try {
-      const stored = localStorage.getItem(this.localKey("rounds"));
-      if (stored) {
-        return JSON.parse(stored);
+  // 1. Authoritative Competition Pipeline State Machine
+  public async getCompetitionPipeline(userId?: string): Promise<CompetitionPipelineInfo> {
+    const quizSub = this.getQuizSubmission();
+    const subs = await this.getSubmissions(userId);
+
+    // 1. Round 1 (Quiz Battle)
+    let r1Score = 0;
+    let r1Status: RoundStatus = "available";
+    let r1Qualified = false;
+
+    if (quizSub && quizSub.status === "evaluated") {
+      r1Score = quizSub.score || 0;
+      if (r1Score >= 60) {
+        r1Status = "qualified";
+        r1Qualified = true;
+      } else {
+        r1Status = "not_qualified";
+        r1Qualified = false;
       }
-      localStorage.setItem(this.localKey("rounds"), JSON.stringify(INITIAL_ROUNDS));
-      return INITIAL_ROUNDS;
+    } else if (quizSub && quizSub.status === "in_progress") {
+      r1Status = "in_progress";
+    }
+
+    // 2. Round 2 (Coding Battle)
+    let r2Score = 0;
+    let r2Status: RoundStatus = "locked";
+    let r2Qualified = false;
+
+    if (!r1Qualified) {
+      r2Status = "locked";
+    } else {
+      const r2Subs = subs.filter((s) => s.roundId === 2);
+      if (r2Subs.length > 0) {
+        const accepted = r2Subs.filter((s) => s.status === "Accepted");
+        r2Score = accepted.reduce((acc, curr) => acc + curr.score, 0);
+        if (r2Score >= 100) {
+          r2Status = "qualified";
+          r2Qualified = true;
+        } else {
+          r2Status = "in_progress";
+        }
+      } else {
+        r2Status = "available";
+      }
+    }
+
+    // 3. Round 3 (Debugging Battle)
+    let r3Score = 0;
+    let r3Status: RoundStatus = "locked";
+    let r3Qualified = false;
+
+    if (!r2Qualified) {
+      r3Status = "locked";
+    } else {
+      const r3Subs = subs.filter((s) => s.roundId === 3);
+      if (r3Subs.length > 0) {
+        const accepted = r3Subs.filter((s) => s.status === "Accepted");
+        r3Score = accepted.reduce((acc, curr) => acc + curr.score, 0);
+        if (r3Score >= 75) {
+          r3Status = "qualified";
+          r3Qualified = true;
+        } else {
+          r3Status = "in_progress";
+        }
+      } else {
+        r3Status = "available";
+      }
+    }
+
+    // 4. Round 4 (Final Battle)
+    let r4Score = 0;
+    let r4Status: RoundStatus = "locked";
+    let r4Qualified = false;
+
+    if (!r3Qualified) {
+      r4Status = "locked";
+    } else {
+      const r4Subs = subs.filter((s) => s.roundId === 4);
+      if (r4Subs.length > 0) {
+        const accepted = r4Subs.filter((s) => s.status === "Accepted");
+        r4Score = accepted.reduce((acc, curr) => acc + curr.score, 0);
+        r4Status = "completed";
+        r4Qualified = true;
+      } else {
+        r4Status = "available";
+      }
+    }
+
+    const resolvedRounds: CompetitionRound[] = INITIAL_ROUNDS.map((r) => {
+      if (r.id === 1) {
+        return { ...r, status: r1Status, currentScore: r1Score, isQualified: r1Qualified };
+      }
+      if (r.id === 2) {
+        return { ...r, status: r2Status, currentScore: r2Score, isQualified: r2Qualified };
+      }
+      if (r.id === 3) {
+        return { ...r, status: r3Status, currentScore: r3Score, isQualified: r3Qualified };
+      }
+      return { ...r, status: r4Status, currentScore: r4Score, isQualified: r4Qualified };
+    });
+
+    const totalScore = r1Score + r2Score + r3Score + r4Score;
+    const maxScore = resolvedRounds.reduce((acc, curr) => acc + curr.maxScore, 0);
+    const roundsCompleted = resolvedRounds.filter(
+      (r) => r.status === "qualified" || r.status === "completed"
+    ).length;
+
+    // Determine next action
+    let nextAction = {
+      label: "Start Quiz Battle",
+      roundSlug: "quiz",
+      description: "Begin Stage 1: Computer Science & Algorithmic Quiz Battle.",
+      isAvailable: true,
+    };
+
+    const nextActiveRound = resolvedRounds.find(
+      (r) => r.status === "available" || r.status === "in_progress"
+    );
+
+    if (nextActiveRound) {
+      nextAction = {
+        label:
+          nextActiveRound.status === "in_progress"
+            ? `Continue ${nextActiveRound.name.split(": ")[1] || nextActiveRound.name}`
+            : `Enter ${nextActiveRound.name.split(": ")[1] || nextActiveRound.name}`,
+        roundSlug: nextActiveRound.slug,
+        description: nextActiveRound.shortDescription,
+        isAvailable: true,
+      };
+    } else if (roundsCompleted === 4) {
+      nextAction = {
+        label: "View Final Leaderboard",
+        roundSlug: "final",
+        description: "You have completed all 4 rounds! Review your final standings.",
+        isAvailable: false,
+      };
+    } else {
+      const failedRound = resolvedRounds.find((r) => r.status === "not_qualified");
+      if (failedRound) {
+        nextAction = {
+          label: "Review Evaluation",
+          roundSlug: failedRound.slug,
+          description: `Qualification cutoff of ${failedRound.qualificationCutoff} pts was not met for ${failedRound.name}.`,
+          isAvailable: false,
+        };
+      }
+    }
+
+    const currentRoundNumber = nextActiveRound ? nextActiveRound.id : Math.min(roundsCompleted + 1, 4);
+    const overallProgressPercentage = Math.round((roundsCompleted / 4) * 100);
+
+    return {
+      id: "competition_cb_2026",
+      name: "Code Battle Hackathon 2026",
+      status: "active",
+      startTime: "2026-10-18T10:00:00Z",
+      endTime: "2026-10-18T22:00:00Z",
+      currentRoundNumber,
+      overallProgressPercentage,
+      totalScore,
+      maxScore,
+      roundsCompleted,
+      totalRounds: 4,
+      nextAction,
+      rounds: resolvedRounds,
+    };
+  }
+
+  // Check if a participant is authorized to enter a specific round
+  public async canAccessRound(
+    slug: string,
+    userId?: string
+  ): Promise<{
+    allowed: boolean;
+    status: RoundStatus;
+    reason?: string;
+    requiredCutoff?: number;
+    prerequisiteRound?: string;
+    round?: CompetitionRound;
+  }> {
+    const pipeline = await this.getCompetitionPipeline(userId);
+    const round = pipeline.rounds.find((r) => r.slug === slug);
+    if (!round) {
+      return { allowed: false, status: "locked", reason: "Unknown competition round." };
+    }
+
+    if (round.status === "locked") {
+      const prevRound = pipeline.rounds.find((r) => r.id === round.id - 1);
+      return {
+        allowed: false,
+        status: "locked",
+        reason: round.unlockConditionText,
+        requiredCutoff: prevRound?.qualificationCutoff,
+        prerequisiteRound: prevRound?.name,
+        round,
+      };
+    }
+
+    if (round.status === "not_qualified") {
+      return {
+        allowed: false,
+        status: "not_qualified",
+        reason: `Qualification cutoff not met: requires at least ${round.qualificationCutoff} points.`,
+        requiredCutoff: round.qualificationCutoff,
+        round,
+      };
+    }
+
+    return { allowed: true, status: round.status, round };
+  }
+
+  public async getRounds(userId?: string): Promise<CompetitionRound[]> {
+    try {
+      const pipeline = await this.getCompetitionPipeline(userId);
+      return pipeline.rounds;
     } catch {
       return INITIAL_ROUNDS;
     }
   }
 
-  public async getRoundBySlug(slug: string): Promise<CompetitionRound | null> {
-    const rounds = await this.getRounds();
+  public async getRoundBySlug(slug: string, userId?: string): Promise<CompetitionRound | null> {
+    const rounds = await this.getRounds(userId);
     return rounds.find((r) => r.slug === slug) || null;
   }
 

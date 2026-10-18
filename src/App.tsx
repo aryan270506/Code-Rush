@@ -13,6 +13,7 @@ import ProtectedRoute from "./routes/ProtectedRoute";
 // Participant Layout and Sub-Pages
 import ParticipantLayout from "./components/participant/ParticipantLayout";
 import ParticipantDashboardPage from "./pages/participant/ParticipantDashboardPage";
+import CompetitionPipelinePage from "./pages/participant/CompetitionPipelinePage";
 import QuizBattlePage from "./pages/participant/rounds/QuizBattlePage";
 import CodingBattlePage from "./pages/participant/rounds/CodingBattlePage";
 import DebuggingBattlePage from "./pages/participant/rounds/DebuggingBattlePage";
@@ -64,6 +65,8 @@ export default function App() {
             >
               <Route index element={<Navigate to="/participant/dashboard" replace />} />
               <Route path="dashboard" element={<ParticipantDashboardPage />} />
+              <Route path="competition" element={<CompetitionPipelinePage />} />
+              <Route path="rounds" element={<Navigate to="/participant/competition" replace />} />
               <Route path="rounds/quiz" element={<QuizBattlePage />} />
               <Route path="rounds/coding" element={<CodingBattlePage />} />
               <Route path="rounds/debugging" element={<DebuggingBattlePage />} />

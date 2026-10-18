@@ -21,6 +21,7 @@ import {
   useParticipantRounds,
   useParticipantStats,
   useSubmissions,
+  useCompetitionPipeline,
 } from "../../hooks/useParticipantData";
 import { StatusBadge } from "../../components/participant/StatusBadge";
 
@@ -29,6 +30,7 @@ export const ParticipantDashboardPage: React.FC = () => {
   const { rounds } = useParticipantRounds();
   const { stats } = useParticipantStats();
   const { submissions } = useSubmissions();
+  const { pipeline } = useCompetitionPipeline();
 
   const getRoundIcon = (slug: string) => {
     switch (slug) {
@@ -45,6 +47,13 @@ export const ParticipantDashboardPage: React.FC = () => {
   };
 
   const displayName = user?.displayName || user?.email?.split("@")[0] || "Competitor";
+
+  const currentRound = pipeline?.rounds.find((r) => r.id === pipeline.currentRoundNumber);
+  const nextActionTargetUrl = pipeline?.nextAction?.roundSlug
+    ? pipeline.nextAction.isAvailable
+      ? `/participant/rounds/${pipeline.nextAction.roundSlug}`
+      : "/participant/competition"
+    : "/participant/competition";
 
   return (
     <div className="space-y-8 animate-fade-in pb-12">
@@ -66,25 +75,26 @@ export const ParticipantDashboardPage: React.FC = () => {
             </h1>
 
             <p className="text-sm sm:text-base text-text-secondary max-w-2xl leading-relaxed">
-              Ready for your next battle? Round 2 is actively evaluating algorithmic solutions.
-              Check test-case feedback, optimize your time complexity, and push for the podium.
+              {pipeline
+                ? `Active in ${pipeline.name}. Current stage: ${currentRound?.name || "Stage 1"}. ${pipeline.nextAction.description}`
+                : "Ready for your next battle? Review requirements, check test-case feedback, optimize your time complexity, and push for the podium."}
             </p>
           </div>
 
           {/* Quick CTA */}
           <div className="shrink-0 flex flex-col sm:flex-row gap-3">
             <Link
-              to="/participant/rounds/coding"
+              to={nextActionTargetUrl}
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-primary to-violet-light px-5 py-3 text-xs sm:text-sm font-semibold text-white shadow-lg shadow-violet-primary/30 hover:opacity-95 transition-all"
             >
-              <span>Continue Coding Battle</span>
+              <span>{pipeline?.nextAction.label || "Enter Competition"}</span>
               <ArrowRight className="h-4 w-4" />
             </Link>
             <Link
-              to="/participant/leaderboard"
+              to="/participant/competition"
               className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-bg-card/70 px-4 py-3 text-xs sm:text-sm font-semibold text-text-secondary hover:bg-bg-card hover:text-text-primary transition-colors"
             >
-              <span>Live Standings</span>
+              <span>Competition Pipeline</span>
             </Link>
           </div>
         </div>
@@ -104,13 +114,19 @@ export const ParticipantDashboardPage: React.FC = () => {
           </div>
           <div className="mt-3 flex items-baseline gap-2">
             <span className="text-3xl font-extrabold text-text-primary font-mono">
-              {stats?.totalScore ?? 260}
+              {pipeline?.totalScore ?? stats?.totalScore ?? 0}
             </span>
-            <span className="text-xs text-text-muted font-mono">/ 800 pts</span>
+            <span className="text-xs text-text-muted font-mono">
+              / {pipeline?.maxScore ?? 800} pts
+            </span>
           </div>
           <p className="mt-1 text-xs text-text-secondary flex items-center gap-1">
             <Sparkles className="h-3 w-3 text-violet-light" />
-            <span>Quiz: 120 pts • Code: 140 pts</span>
+            <span>
+              {pipeline
+                ? `${pipeline.roundsCompleted} of ${pipeline.totalRounds} rounds evaluated`
+                : "Active Competition Score"}
+            </span>
           </p>
         </div>
 
@@ -150,12 +166,20 @@ export const ParticipantDashboardPage: React.FC = () => {
           </div>
           <div className="mt-3 flex items-baseline gap-2">
             <span className="text-3xl font-extrabold text-text-primary font-mono">
-              1 <span className="text-text-muted text-xl font-normal">/ 4</span>
+              {pipeline?.roundsCompleted ?? 1}{" "}
+              <span className="text-text-muted text-xl font-normal">
+                / {pipeline?.totalRounds ?? 4}
+              </span>
             </span>
-            <span className="text-xs text-success font-medium">Round 2 Live</span>
+            <span className="text-xs text-success font-medium">
+              {pipeline ? `${pipeline.overallProgressPercentage}% Progress` : "Round 2 Live"}
+            </span>
           </div>
           <div className="mt-2 h-1.5 w-full bg-bg-primary rounded-full overflow-hidden">
-            <div className="h-full bg-gradient-to-r from-success to-cyan-primary rounded-full w-1/4" />
+            <div
+              className="h-full bg-gradient-to-r from-success to-cyan-primary rounded-full transition-all duration-500"
+              style={{ width: `${pipeline?.overallProgressPercentage ?? 25}%` }}
+            />
           </div>
         </div>
 
@@ -170,12 +194,28 @@ export const ParticipantDashboardPage: React.FC = () => {
             </div>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-xl sm:text-2xl font-bold text-success">
-              Qualified
+            <span
+              className={`text-xl sm:text-2xl font-bold ${
+                pipeline?.rounds.some((r) => r.status === "not_qualified")
+                  ? "text-danger"
+                  : pipeline?.roundsCompleted === pipeline?.totalRounds
+                  ? "text-cyan-light"
+                  : "text-success"
+              }`}
+            >
+              {pipeline?.rounds.some((r) => r.status === "not_qualified")
+                ? "Not Qualified"
+                : pipeline?.roundsCompleted === pipeline?.totalRounds
+                ? "All Cleared"
+                : "Active & Qualified"}
             </span>
           </div>
-          <p className="mt-1 text-xs text-text-secondary">
-            Eligible for Round 3 Debugging Arena
+          <p className="mt-1 text-xs text-text-secondary truncate">
+            {pipeline?.rounds.some((r) => r.status === "not_qualified")
+              ? "Cutoff not reached in previous round"
+              : pipeline?.roundsCompleted === pipeline?.totalRounds
+              ? "All rounds completed"
+              : `Current: ${currentRound?.name || "Stage 1"}`}
           </p>
         </div>
       </div>
@@ -193,19 +233,28 @@ export const ParticipantDashboardPage: React.FC = () => {
             </p>
           </div>
 
-          <div className="flex items-center gap-2 text-xs font-mono text-text-muted">
-            <span className="inline-block h-2 w-2 rounded-full bg-success" /> Completed
-            <span className="inline-block h-2 w-2 rounded-full bg-warning ml-2" /> In Progress
-            <span className="inline-block h-2 w-2 rounded-full bg-cyan-primary ml-2" /> Available
+          <div className="flex items-center gap-4">
+            <div className="hidden sm:flex items-center gap-2 text-xs font-mono text-text-muted">
+              <span className="inline-block h-2 w-2 rounded-full bg-success" /> Completed
+              <span className="inline-block h-2 w-2 rounded-full bg-warning ml-2" /> In Progress
+              <span className="inline-block h-2 w-2 rounded-full bg-cyan-primary ml-2" /> Available
+            </div>
+            <Link
+              to="/participant/competition"
+              className="text-xs font-semibold text-violet-light hover:underline flex items-center gap-1 shrink-0"
+            >
+              <span>View Full Pipeline</span>
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
           </div>
         </div>
 
         {/* Rounds Grid */}
         <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-          {rounds.map((round) => {
+          {(pipeline?.rounds || rounds).map((round) => {
             const Icon = getRoundIcon(round.slug);
-            const isRoundLocked = round.status === "locked";
-            const isCompleted = round.status === "completed";
+            const isRoundLocked = round.status === "locked" || round.status === "upcoming";
+            const isCompleted = round.status === "completed" || round.status === "qualified";
             const isInProgress = round.status === "in_progress";
 
             return (
@@ -272,13 +321,15 @@ export const ParticipantDashboardPage: React.FC = () => {
                 {/* Bottom Action Button */}
                 <div className="mt-5 pt-3 border-t border-border/60">
                   {isRoundLocked ? (
-                    <button
-                      disabled
-                      className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-border bg-bg-card/50 py-2 text-xs font-semibold text-text-muted cursor-not-allowed"
+                    <Link
+                      to="/participant/competition"
+                      className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-border bg-bg-card/50 py-2 text-xs font-semibold text-text-muted hover:text-text-secondary hover:border-text-muted transition-colors text-center truncate px-2"
                     >
-                      <Lock className="h-3.5 w-3.5" />
-                      <span>Unlocks after R3</span>
-                    </button>
+                      <Lock className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">
+                        {round.unlockConditionText || "Locked • See Pipeline"}
+                      </span>
+                    </Link>
                   ) : (
                     <Link
                       to={`/participant/rounds/${round.slug}`}
@@ -363,12 +414,14 @@ export const ParticipantDashboardPage: React.FC = () => {
               <div>
                 <div className="flex justify-between text-xs font-medium mb-1.5">
                   <span className="text-text-secondary">Overall Hackathon Completion</span>
-                  <span className="font-mono text-success font-bold">32.5%</span>
+                  <span className="font-mono text-success font-bold">
+                    {pipeline?.overallProgressPercentage ?? 25}%
+                  </span>
                 </div>
                 <div className="h-2.5 w-full bg-bg-primary rounded-full overflow-hidden border border-border">
                   <div
-                    className="h-full bg-gradient-to-r from-cyan-primary to-success rounded-full"
-                    style={{ width: "32.5%" }}
+                    className="h-full bg-gradient-to-r from-cyan-primary to-success rounded-full transition-all duration-500"
+                    style={{ width: `${pipeline?.overallProgressPercentage ?? 25}%` }}
                   />
                 </div>
               </div>

@@ -10,6 +10,7 @@ import {
   Loader2,
   Wrench,
   ShieldCheck,
+  ArrowLeft,
 } from "lucide-react";
 import {
   DEBUGGING_PROBLEMS,
@@ -19,8 +20,9 @@ import type { CodingProblem } from "../../../types/participant";
 import { CodeEditor } from "../../../components/participant/CodeEditor";
 import { ConfirmDialog } from "../../../components/participant/ConfirmDialog";
 import { useAuth } from "../../../context/AuthContext";
+import { RoundAccessGuard } from "../../../components/participant/RoundAccessGuard";
 
-export const DebuggingBattlePage: React.FC = () => {
+const DebuggingBattleWorkspace: React.FC = () => {
   const { user } = useAuth();
   const selectedBugIndex = 0;
   const [language, setLanguage] = useState<string>("python");
@@ -91,6 +93,13 @@ export const DebuggingBattlePage: React.FC = () => {
       {/* Top Banner */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 rounded-2xl border border-warning/40 bg-bg-card/70 p-4 sm:p-5 backdrop-blur-md">
         <div className="flex items-center gap-3">
+          <Link
+            to="/participant/competition"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-bg-secondary text-text-muted hover:text-white hover:bg-bg-card border border-border transition-colors"
+            title="Back to Pipeline"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Link>
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-warning/20 text-warning border border-warning/40">
             <Bug className="h-5 w-5" />
           </div>
@@ -340,6 +349,14 @@ export const DebuggingBattlePage: React.FC = () => {
         onCancel={() => setIsSubmitModalOpen(false)}
       />
     </div>
+  );
+};
+
+export const DebuggingBattlePage: React.FC = () => {
+  return (
+    <RoundAccessGuard roundSlug="debugging">
+      <DebuggingBattleWorkspace />
+    </RoundAccessGuard>
   );
 };
 

@@ -2,10 +2,7 @@ import React, { useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
-  Brain,
-  Code2,
-  Bug,
-  Trophy,
+  Swords,
   BarChart3,
   ListOrdered,
   FileCode2,
@@ -21,7 +18,6 @@ import {
   Lock,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
-import { useParticipantRounds } from "../../hooks/useParticipantData";
 
 interface NavItem {
   label: string;
@@ -53,7 +49,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const location = useLocation();
   const { user } = useAuth();
-  const { rounds } = useParticipantRounds();
 
   // Close mobile drawer on route change
   useEffect(() => {
@@ -91,11 +86,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     });
   };
 
-  const getRoundStatus = (slug: string) => {
-    const r = rounds.find((item) => item.slug === slug);
-    return r?.status || "locked";
-  };
-
   // Nav items configuration
   const navGroups: NavGroup[] = [
     {
@@ -112,32 +102,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
       groupTitle: "Competition",
       items: [
         {
-          label: "Quiz Battle",
-          href: "/participant/rounds/quiz",
-          icon: Brain,
-          badge: getRoundStatus("quiz"),
-          badgeColor: "cyan",
-        },
-        {
-          label: "Coding Battle",
-          href: "/participant/rounds/coding",
-          icon: Code2,
-          badge: getRoundStatus("coding"),
+          label: "Competition",
+          href: "/participant/competition",
+          icon: Swords,
+          badge: "Pipeline",
           badgeColor: "violet",
-        },
-        {
-          label: "Debugging Battle",
-          href: "/participant/rounds/debugging",
-          icon: Bug,
-          badge: getRoundStatus("debugging"),
-          badgeColor: "amber",
-        },
-        {
-          label: "Final Battle",
-          href: "/participant/rounds/final",
-          icon: Trophy,
-          badge: getRoundStatus("final"),
-          badgeColor: "purple",
         },
       ],
     },
@@ -286,7 +255,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <nav className="space-y-1">
                 {group.items.map((item) => {
                   const Icon = item.icon;
-                  const isActive = location.pathname === item.href;
+                  const isActive =
+                    location.pathname === item.href ||
+                    (item.href === "/participant/competition" &&
+                      (location.pathname === "/participant/competition" ||
+                        location.pathname.startsWith("/participant/rounds")));
 
                   return (
                     <div key={item.href} className="relative group">

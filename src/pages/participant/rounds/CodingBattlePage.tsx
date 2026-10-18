@@ -8,6 +8,7 @@ import {
   Terminal,
   Loader2,
   Cpu,
+  ArrowLeft,
 } from "lucide-react";
 import {
   CODING_PROBLEMS,
@@ -17,8 +18,9 @@ import type { CodingProblem } from "../../../types/participant";
 import { CodeEditor } from "../../../components/participant/CodeEditor";
 import { useAuth } from "../../../context/AuthContext";
 import { ConfirmDialog } from "../../../components/participant/ConfirmDialog";
+import { RoundAccessGuard } from "../../../components/participant/RoundAccessGuard";
 
-export const CodingBattlePage: React.FC = () => {
+const CodingBattleWorkspace: React.FC = () => {
   const { user } = useAuth();
   const [selectedProblemIndex, setSelectedProblemIndex] = useState(0);
   const [language, setLanguage] = useState<string>("python");
@@ -102,9 +104,18 @@ export const CodingBattlePage: React.FC = () => {
                 Online Judging Active
               </span>
             </div>
-            <h1 className="text-lg sm:text-xl font-extrabold text-text-primary tracking-tight">
-              Algorithmic Coding Battle
-            </h1>
+            <div className="flex items-center gap-3 mt-0.5">
+              <h1 className="text-lg sm:text-xl font-extrabold text-text-primary tracking-tight">
+                Algorithmic Coding Battle
+              </h1>
+              <Link
+                to="/participant/competition"
+                className="text-xs font-mono text-violet-light hover:underline flex items-center gap-1"
+              >
+                <ArrowLeft className="h-3 w-3" />
+                <span>Pipeline</span>
+              </Link>
+            </div>
           </div>
         </div>
 
@@ -375,6 +386,14 @@ export const CodingBattlePage: React.FC = () => {
         onCancel={() => setIsSubmitModalOpen(false)}
       />
     </div>
+  );
+};
+
+export const CodingBattlePage: React.FC = () => {
+  return (
+    <RoundAccessGuard roundSlug="coding">
+      <CodingBattleWorkspace />
+    </RoundAccessGuard>
   );
 };
 

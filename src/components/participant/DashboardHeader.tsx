@@ -50,6 +50,9 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   // Compute breadcrumbs and title
   const getPageInfo = () => {
     const path = location.pathname;
+    if (path.includes("/competition")) {
+      return { title: "Competition Pipeline", group: "Competition" };
+    }
     if (path.includes("/rounds/quiz")) {
       return { title: "Round 1: Quiz Battle", group: "Competition" };
     }

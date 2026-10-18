@@ -462,33 +462,48 @@ export const QuizBattlePage: React.FC = () => {
   // ─────────────────────────────────────────────────────────────────────
   // VIEW 3: RESULTS & EVALUATION
   // ─────────────────────────────────────────────────────────────────────
+  const isQualified = (evaluationResult?.score ?? 0) >= 60;
+
   return (
     <div className="max-w-4xl mx-auto space-y-8 animate-fade-in py-6">
       {/* Result Hero Card */}
-      <div className="rounded-3xl border border-success/30 bg-gradient-to-br from-[#0b1c1b] via-[#0d162d] to-[#070717] p-8 shadow-2xl relative overflow-hidden text-center sm:text-left">
+      <div
+        className={`rounded-3xl border p-8 shadow-2xl relative overflow-hidden text-center sm:text-left ${
+          isQualified
+            ? "border-success/30 bg-gradient-to-br from-[#0b1c1b] via-[#0d162d] to-[#070717]"
+            : "border-danger/30 bg-gradient-to-br from-[#260c14] via-[#140d22] to-[#08081a]"
+        }`}
+      >
         <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
           <div className="space-y-3">
-            <div className="inline-flex items-center gap-2 rounded-full border border-success/40 bg-success/15 px-3 py-1 text-xs font-semibold text-success">
+            <div
+              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${
+                isQualified
+                  ? "border-success/40 bg-success/15 text-success"
+                  : "border-danger/40 bg-danger/15 text-danger"
+              }`}
+            >
               <CheckCircle2 className="h-4 w-4" />
-              <span>Round 1 Evaluated • Qualified</span>
+              <span>{isQualified ? "Round 1 Evaluated • Qualified" : "Round 1 Evaluated • Cutoff Not Met"}</span>
             </div>
 
             <h1 className="text-3xl sm:text-4xl font-extrabold text-text-primary tracking-tight">
-              Quiz Battle Completed!
+              {isQualified ? "Quiz Battle Completed!" : "Quiz Battle Evaluation"}
             </h1>
 
             <p className="text-sm text-text-secondary max-w-lg leading-relaxed">
-              Congratulations! Your answers have been recorded and scored. You have exceeded the
-              qualification threshold and unlocked Round 2: Coding Battle.
+              {isQualified
+                ? "Congratulations! You exceeded the 60-point cutoff and unlocked Round 2: Coding Battle."
+                : "You scored below the 60-point qualification cutoff for this round. Review your answers and explanations below."}
             </p>
           </div>
 
           {/* Big Score Dial */}
           <div className="shrink-0 flex flex-col items-center justify-center h-36 w-36 rounded-full border-2 border-violet-primary/40 bg-gradient-to-tr from-violet-primary/20 to-cyan-primary/20 shadow-xl">
             <span className="font-mono text-3xl font-extrabold text-white">
-              {evaluationResult?.score ?? 120}
+              {evaluationResult?.score ?? 0}
             </span>
-            <span className="font-mono text-xs text-text-muted">/ 150 Points</span>
+            <span className="font-mono text-xs text-text-muted">/ 100 Points</span>
           </div>
         </div>
 
@@ -508,8 +523,12 @@ export const QuizBattlePage: React.FC = () => {
           </div>
           <div className="rounded-xl bg-bg-card/70 p-4 border border-border">
             <span className="text-xs text-text-muted block font-mono">Status</span>
-            <span className="text-xl font-bold text-violet-light font-mono mt-0.5 block">
-              Qualified
+            <span
+              className={`text-xl font-bold font-mono mt-0.5 block ${
+                isQualified ? "text-success" : "text-danger"
+              }`}
+            >
+              {isQualified ? "Qualified" : "Not Qualified"}
             </span>
           </div>
         </div>
@@ -518,20 +537,26 @@ export const QuizBattlePage: React.FC = () => {
       {/* Action Buttons */}
       <div className="flex flex-col sm:flex-row gap-4 justify-between items-center">
         <Link
-          to="/participant/dashboard"
+          to="/participant/competition"
           className="inline-flex items-center gap-2 rounded-xl border border-border bg-bg-card px-5 py-3 text-xs font-semibold text-text-secondary hover:text-text-primary transition-colors"
         >
           <ChevronLeft className="h-4 w-4" />
-          <span>Return to Dashboard</span>
+          <span>Return to Competition Pipeline</span>
         </Link>
 
-        <Link
-          to="/participant/rounds/coding"
-          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-primary to-cyan-primary px-6 py-3 text-xs font-bold text-white shadow-lg shadow-violet-primary/25 hover:opacity-95 transition-all"
-        >
-          <span>Advance to Coding Battle (Round 2)</span>
-          <ArrowRight className="h-4 w-4" />
-        </Link>
+        {isQualified ? (
+          <Link
+            to="/participant/rounds/coding"
+            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-primary to-cyan-primary px-6 py-3 text-xs font-bold text-white shadow-lg shadow-violet-primary/25 hover:opacity-95 transition-all"
+          >
+            <span>Advance to Coding Battle (Round 2)</span>
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        ) : (
+          <span className="text-xs text-text-muted font-mono">
+            Cutoff of 60 pts required to advance.
+          </span>
+        )}
       </div>
 
       {/* Review Questions & Explanations */}

@@ -1,14 +1,17 @@
 export type RoundStatus =
-  | "locked"
   | "upcoming"
+  | "locked"
   | "available"
   | "in_progress"
-  | "completed"
+  | "submitted"
+  | "under_evaluation"
   | "awaiting_evaluation"
   | "qualified"
-  | "not_qualified";
+  | "not_qualified"
+  | "completed"
+  | "expired";
 
-export interface CompetitionRound {
+export interface CompetitionRoundConfig {
   id: number;
   slug: "quiz" | "coding" | "debugging" | "final";
   name: string;
@@ -19,12 +22,38 @@ export interface CompetitionRound {
   currentScore?: number;
   durationMinutes: number;
   questionCount: number;
+  qualificationCutoff: number;
+  requiresQualificationToAdvance: boolean;
+  unlockConditionText: string;
   startTime?: string;
   endTime?: string;
   rules: string[];
   iconName: string;
-  color: "violet" | "cyan";
+  color: "violet" | "cyan" | "amber" | "purple";
   isQualified?: boolean;
+}
+
+export type CompetitionRound = CompetitionRoundConfig;
+
+export interface CompetitionPipelineInfo {
+  id: string;
+  name: string;
+  status: "upcoming" | "active" | "under_evaluation" | "completed";
+  startTime: string;
+  endTime: string;
+  currentRoundNumber: number;
+  overallProgressPercentage: number;
+  totalScore: number;
+  maxScore: number;
+  roundsCompleted: number;
+  totalRounds: number;
+  nextAction: {
+    label: string;
+    roundSlug: string;
+    description: string;
+    isAvailable: boolean;
+  };
+  rounds: CompetitionRoundConfig[];
 }
 
 export interface QuizQuestion {

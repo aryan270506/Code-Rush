@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { participantService } from "../services/participantService";
 import type {
   CompetitionRound,
+  CompetitionPipelineInfo,
   ParticipantStats,
   CodeSubmission,
   LeaderboardEntry,
@@ -10,18 +11,40 @@ import type {
 } from "../types/participant";
 import { useAuth } from "../context/AuthContext";
 
+export function useCompetitionPipeline() {
+  const { user } = useAuth();
+  const [pipeline, setPipeline] = useState<CompetitionPipelineInfo | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchPipeline = useCallback(async () => {
+    try {
+      const data = await participantService.getCompetitionPipeline(user?.uid);
+      setPipeline(data);
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    fetchPipeline();
+  }, [fetchPipeline]);
+
+  return { pipeline, loading, refreshPipeline: fetchPipeline };
+}
+
 export function useParticipantRounds() {
+  const { user } = useAuth();
   const [rounds, setRounds] = useState<CompetitionRound[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchRounds = useCallback(async () => {
     try {
-      const data = await participantService.getRounds();
+      const data = await participantService.getRounds(user?.uid);
       setRounds(data);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     fetchRounds();

@@ -96,13 +96,35 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
     );
   }
 
-  if (norm === "awaiting_evaluation" || norm === "pending") {
+  if (norm === "submitted" || norm === "under_evaluation" || norm === "awaiting_evaluation" || norm === "pending") {
     return (
       <span
-        className={`inline-flex items-center font-medium rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30 ${sizeClasses} ${className}`}
+        className={`inline-flex items-center font-medium rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 ${sizeClasses} ${className}`}
       >
-        <Clock className="h-3 w-3 animate-pulse" />
-        Awaiting Evaluation
+        <Clock className="h-3 w-3 animate-spin" />
+        {norm === "submitted" ? "Submitted" : "Under Evaluation"}
+      </span>
+    );
+  }
+
+  if (norm === "not_qualified") {
+    return (
+      <span
+        className={`inline-flex items-center font-medium rounded-full bg-danger/15 text-danger border border-danger/30 ${sizeClasses} ${className}`}
+      >
+        <AlertCircle className="h-3 w-3" />
+        Not Qualified
+      </span>
+    );
+  }
+
+  if (norm === "expired") {
+    return (
+      <span
+        className={`inline-flex items-center font-medium rounded-full bg-bg-card text-text-muted border border-border ${sizeClasses} ${className}`}
+      >
+        <Clock className="h-3 w-3 text-text-muted" />
+        Expired
       </span>
     );
   }
@@ -112,8 +134,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
     norm === "failed" ||
     norm === "compilation error" ||
     norm === "runtime error" ||
-    norm === "time limit exceeded" ||
-    norm === "not_qualified"
+    norm === "time limit exceeded"
   ) {
     return (
       <span
