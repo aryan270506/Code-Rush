@@ -8,8 +8,22 @@ import VerifyEmailPage from "./pages/auth/VerifyEmailPage";
 import ForgotPasswordPage from "./pages/auth/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/auth/ResetPasswordPage";
 import UnauthorizedPage from "./pages/auth/UnauthorizedPage";
-import ParticipantDashboard from "./pages/dashboard/ParticipantDashboard";
 import ProtectedRoute from "./routes/ProtectedRoute";
+
+// Participant Layout and Sub-Pages
+import ParticipantLayout from "./components/participant/ParticipantLayout";
+import ParticipantDashboardPage from "./pages/participant/ParticipantDashboardPage";
+import QuizBattlePage from "./pages/participant/rounds/QuizBattlePage";
+import CodingBattlePage from "./pages/participant/rounds/CodingBattlePage";
+import DebuggingBattlePage from "./pages/participant/rounds/DebuggingBattlePage";
+import FinalBattlePage from "./pages/participant/rounds/FinalBattlePage";
+import LeaderboardPage from "./pages/participant/LeaderboardPage";
+import PerformancePage from "./pages/participant/PerformancePage";
+import SubmissionsPage from "./pages/participant/SubmissionsPage";
+import AnnouncementsPage from "./pages/participant/AnnouncementsPage";
+import ProfilePage from "./pages/participant/ProfilePage";
+import SettingsPage from "./pages/participant/SettingsPage";
+import HelpSupportPage from "./pages/participant/HelpSupportPage";
 
 // Admin Dashboard Screens
 import AdminOverview from "./pages/admin/AdminOverview";
@@ -39,15 +53,30 @@ export default function App() {
             <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route path="/unauthorized" element={<UnauthorizedPage />} />
 
-            {/* Protected Participant Route (Requires verified participant/admin) */}
+            {/* Protected Participant Nested Routes */}
             <Route
-              path="/participant/dashboard"
+              path="/participant"
               element={
                 <ProtectedRoute allowedRoles={["participant", "admin"]} requireVerified={true}>
-                  <ParticipantDashboard />
+                  <ParticipantLayout />
                 </ProtectedRoute>
               }
-            />
+            >
+              <Route index element={<Navigate to="/participant/dashboard" replace />} />
+              <Route path="dashboard" element={<ParticipantDashboardPage />} />
+              <Route path="rounds/quiz" element={<QuizBattlePage />} />
+              <Route path="rounds/coding" element={<CodingBattlePage />} />
+              <Route path="rounds/debugging" element={<DebuggingBattlePage />} />
+              <Route path="rounds/final" element={<FinalBattlePage />} />
+              <Route path="leaderboard" element={<LeaderboardPage />} />
+              <Route path="performance" element={<PerformancePage />} />
+              <Route path="submissions" element={<SubmissionsPage />} />
+              <Route path="announcements" element={<AnnouncementsPage />} />
+              <Route path="profile" element={<ProfilePage />} />
+              <Route path="settings" element={<SettingsPage />} />
+              <Route path="help" element={<HelpSupportPage />} />
+              <Route path="*" element={<Navigate to="/participant/dashboard" replace />} />
+            </Route>
 
             {/* Screen 1: Admin Overview */}
             <Route
