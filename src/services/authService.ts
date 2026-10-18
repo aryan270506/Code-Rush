@@ -46,26 +46,138 @@ export const DEMO_CREDENTIALS = {
   },
 };
 
+export interface SeededParticipantCredential {
+  databaseId: string;
+  name: string;
+  email: string;
+  username: string;
+  password: string;
+  institution: string;
+  department: string;
+  academicYear: number;
+  scores: Record<string, number>;
+  qualification: Record<string, "qualified" | "not_qualified">;
+}
+
+export const SEEDED_PARTICIPANTS: SeededParticipantCredential[] = [
+  {
+    databaseId: "seed-participant-01",
+    name: "Aditi Sharma",
+    email: "aditi.sharma@seed.example.com",
+    username: "aditi_sharma",
+    password: "Password@Aditi2026#",
+    institution: "IIT Bombay",
+    department: "Computer Science",
+    academicYear: 4,
+    scores: { quiz: 90, coding: 170, debugging: 150, final: 250 },
+    qualification: { quiz: "qualified", coding: "qualified", debugging: "qualified", final: "qualified" },
+  },
+  {
+    databaseId: "seed-participant-02",
+    name: "Rohan Patil",
+    email: "rohan.patil@seed.example.com",
+    username: "rohan_patil",
+    password: "Password@Rohan2026#",
+    institution: "COEP Technological University",
+    department: "Information Technology",
+    academicYear: 3,
+    scores: { quiz: 80, coding: 130, debugging: 90 },
+    qualification: { quiz: "qualified", coding: "qualified", debugging: "qualified" },
+  },
+  {
+    databaseId: "seed-participant-03",
+    name: "Priya Kulkarni",
+    email: "priya.kulkarni@seed.example.com",
+    username: "priya_kulkarni",
+    password: "Password@Priya2026#",
+    institution: "VJTI Mumbai",
+    department: "Computer Engineering",
+    academicYear: 3,
+    scores: { quiz: 60, coding: 112 },
+    qualification: { quiz: "qualified", coding: "qualified" },
+  },
+  {
+    databaseId: "seed-participant-04",
+    name: "Aditya Deshmukh",
+    email: "aditya.deshmukh@seed.example.com",
+    username: "aditya_deshmukh",
+    password: "Password@Aditya2026#",
+    institution: "BITS Pilani, Goa Campus",
+    department: "Computer Science",
+    academicYear: 2,
+    scores: { quiz: 48 },
+    qualification: { quiz: "not_qualified" },
+  },
+  {
+    databaseId: "seed-participant-05",
+    name: "Sneha Joshi",
+    email: "sneha.joshi@seed.example.com",
+    username: "sneha_joshi",
+    password: "Password@Sneha2026#",
+    institution: "NIT Surathkal",
+    department: "Artificial Intelligence",
+    academicYear: 4,
+    scores: { quiz: 75, coding: 105, debugging: 80 },
+    qualification: { quiz: "qualified", coding: "qualified", debugging: "qualified" },
+  },
+  {
+    databaseId: "seed-participant-06",
+    name: "Rahul Verma",
+    email: "rahul.verma@seed.example.com",
+    username: "rahul_verma",
+    password: "Password@Rahul2026#",
+    institution: "IIT Delhi",
+    department: "Mathematics and Computing",
+    academicYear: 4,
+    scores: { quiz: 82 },
+    qualification: { quiz: "qualified" },
+  },
+  {
+    databaseId: "seed-participant-07",
+    name: "Ananya Iyer",
+    email: "ananya.iyer@seed.example.com",
+    username: "ananya_iyer",
+    password: "Password@Ananya2026#",
+    institution: "IIIT Hyderabad",
+    department: "Computer Science",
+    academicYear: 3,
+    scores: { quiz: 56 },
+    qualification: { quiz: "not_qualified" },
+  },
+  {
+    databaseId: "seed-participant-08",
+    name: "Karan Shah",
+    email: "karan.shah@seed.example.com",
+    username: "karan_shah",
+    password: "Password@Karan2026#",
+    institution: "DA-IICT Gandhinagar",
+    department: "Information and Communication Technology",
+    academicYear: 2,
+    scores: { quiz: 68, coding: 72 },
+    qualification: { quiz: "qualified", coding: "not_qualified" },
+  },
+];
+
 export const authService = {
   /**
    * Log in participant or administrator
    */
   async login(email: string, password: string): Promise<{ user: User; profile: UserProfile | null }> {
-    const cleanEmail = email.trim().toLowerCase();
+    const cleanIdentifier = email.trim().toLowerCase();
 
     // Check if logging in with demo credentials
     const isDemoAdmin =
-      cleanEmail === DEMO_CREDENTIALS.admin.email.toLowerCase() &&
+      cleanIdentifier === DEMO_CREDENTIALS.admin.email.toLowerCase() &&
       password === DEMO_CREDENTIALS.admin.password;
     const isDemoParticipant =
-      cleanEmail === DEMO_CREDENTIALS.participant.email.toLowerCase() &&
+      cleanIdentifier === DEMO_CREDENTIALS.participant.email.toLowerCase() &&
       password === DEMO_CREDENTIALS.participant.password;
 
     if (isDemoAdmin || isDemoParticipant) {
       const isAdm = isDemoAdmin;
       const demoUser = {
         uid: isAdm ? "demo-admin-uid" : "demo-participant-uid",
-        email: cleanEmail,
+        email: cleanIdentifier,
         displayName: isAdm ? DEMO_CREDENTIALS.admin.displayName : DEMO_CREDENTIALS.participant.displayName,
         emailVerified: true,
         reload: async () => {},
@@ -74,7 +186,7 @@ export const authService = {
 
       const demoProfile: UserProfile = {
         uid: demoUser.uid,
-        email: cleanEmail,
+        email: cleanIdentifier,
         displayName: demoUser.displayName || "",
         role: isAdm ? "admin" : "participant",
         emailVerified: true,
@@ -85,9 +197,52 @@ export const authService = {
 
       sessionStorage.setItem("cb_demo_user", JSON.stringify({ user: demoUser, profile: demoProfile }));
       sessionStorage.setItem("cb_verified_" + demoUser.uid, "true");
-      sessionStorage.setItem("cb_verified_" + cleanEmail, "true");
+      sessionStorage.setItem("cb_verified_" + cleanIdentifier, "true");
 
       return { user: demoUser, profile: demoProfile };
+    }
+
+    // Check if logging in with seeded participant credentials
+    const seeded = SEEDED_PARTICIPANTS.find(
+      (p) =>
+        p.email.toLowerCase() === cleanIdentifier ||
+        p.username.toLowerCase() === cleanIdentifier
+    );
+
+    if (seeded) {
+      if (seeded.password !== password) {
+        throw new Error("Invalid password for seeded participant account.");
+      }
+
+      const seedUser = {
+        uid: seeded.databaseId,
+        email: seeded.email,
+        displayName: seeded.name,
+        emailVerified: true,
+        reload: async () => {},
+        getIdToken: async () => "seed-token-" + seeded.databaseId,
+      } as unknown as User;
+
+      const seedProfile: UserProfile = {
+        uid: seeded.databaseId,
+        email: seeded.email,
+        displayName: seeded.name,
+        institution: seeded.institution,
+        department: seeded.department,
+        academicYear: seeded.academicYear,
+        role: "participant",
+        emailVerified: true,
+        accountStatus: "active",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      sessionStorage.setItem("cb_demo_user", JSON.stringify({ user: seedUser, profile: seedProfile }));
+      sessionStorage.setItem("cb_verified_" + seedUser.uid, "true");
+      sessionStorage.setItem("cb_verified_" + seeded.email.toLowerCase(), "true");
+      sessionStorage.setItem("cb_verified_" + seeded.username.toLowerCase(), "true");
+
+      return { user: seedUser, profile: seedProfile };
     }
 
     if (!isFirebaseConfigured) {

@@ -251,7 +251,7 @@ export const ParticipantDashboardPage: React.FC = () => {
 
         {/* Rounds Grid */}
         <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-          {(pipeline?.rounds || rounds).map((round) => {
+          {(pipeline?.rounds || rounds).map((round, idx) => {
             const Icon = getRoundIcon(round.slug);
             const isRoundLocked = round.status === "locked" || round.status === "upcoming";
             const isCompleted = round.status === "completed" || round.status === "qualified";
@@ -259,7 +259,7 @@ export const ParticipantDashboardPage: React.FC = () => {
 
             return (
               <div
-                key={round.id}
+                key={round.id ? `round-${round.id}-${round.slug || idx}` : `round-idx-${idx}`}
                 className={`relative rounded-2xl border transition-all p-5 flex flex-col justify-between ${
                   isInProgress
                     ? "border-warning/50 bg-warning/5 shadow-lg shadow-warning/5"
@@ -433,9 +433,9 @@ export const ParticipantDashboardPage: React.FC = () => {
                 Recent Submissions
               </span>
               <div className="space-y-2">
-                {submissions.slice(0, 2).map((sub) => (
+                {submissions.slice(0, 2).map((sub, idx) => (
                   <div
-                    key={sub.id}
+                    key={sub.id || `sub-${idx}-${sub.problemTitle || "sub"}`}
                     className="flex items-center justify-between rounded-xl bg-bg-card p-3 border border-border text-xs"
                   >
                     <div className="flex items-center gap-3 overflow-hidden">

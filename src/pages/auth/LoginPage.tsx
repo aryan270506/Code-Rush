@@ -55,8 +55,14 @@ export default function LoginPage() {
 
     // Validate inputs
     const newErrors: { email?: string; password?: string; general?: string } = {};
-    const emailErr = validateEmail(email);
-    if (emailErr) newErrors.email = emailErr;
+    if (!email || !email.trim()) {
+      newErrors.email = "Please enter your email address or login ID.";
+    } else if (email.includes("@")) {
+      const emailErr = validateEmail(email);
+      if (emailErr) newErrors.email = emailErr;
+    } else if (email.trim().length < 3) {
+      newErrors.email = "Login ID must be at least 3 characters.";
+    }
     if (!password) newErrors.password = "Please enter your password.";
 
     if (Object.keys(newErrors).length > 0) {
@@ -148,11 +154,11 @@ export default function LoginPage() {
       <form onSubmit={handleSubmit} className="space-y-4" noValidate>
         <AuthFormField
           id="login-email"
-          label="Email Address"
-          type="email"
-          autoComplete="email"
+          label="Email Address or Login ID"
+          type="text"
+          autoComplete="username"
           icon={Mail}
-          placeholder="coder@example.com"
+          placeholder="name@example.com or username"
           value={email}
           onChange={(e) => {
             setEmail(e.target.value);

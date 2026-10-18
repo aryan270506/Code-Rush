@@ -33,3 +33,7 @@ functions/node_modules
 *.njsproj
 *.sln
 *.sw?
+
+# Seeded Credentials & Secret Dumps (NEVER COMMIT)
+seeded-participant-credentials.txt
+*-credentials.txt

@@ -11,6 +11,9 @@ export interface UserProfile {
   accountStatus: AccountStatus;
   createdAt: string;
   updatedAt: string;
+  institution?: string;
+  department?: string;
+  academicYear?: number;
 }
 
 export interface PasswordStrength {

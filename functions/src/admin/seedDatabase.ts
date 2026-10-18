@@ -1,13 +1,17 @@
+import * as fs from "fs";
+import * as path from "path";
 import * as admin from "firebase-admin";
 import { recalculateLeaderboard } from "../competition/leaderboard";
 
 const COMPETITION_ID = "comp-2026-spring";
 const SEED_SOURCE = "development-seed-2026-10";
 
-type SeedParticipant = {
+export type SeedParticipant = {
   uid: string;
   name: string;
   email: string;
+  username: string;
+  password: string;
   institution: string;
   department: string;
   year: number;
@@ -15,15 +19,103 @@ type SeedParticipant = {
   qualification: Record<string, "qualified" | "not_qualified">;
 };
 
-const participants: SeedParticipant[] = [
-  { uid: "seed-participant-01", name: "Aditi Sharma", email: "aditi.sharma@seed.example.com", institution: "IIT Bombay", department: "Computer Science", year: 4, scores: { quiz: 90, coding: 170, debugging: 150, final: 250 }, qualification: { quiz: "qualified", coding: "qualified", debugging: "qualified", final: "qualified" } },
-  { uid: "seed-participant-02", name: "Rohan Patil", email: "rohan.patil@seed.example.com", institution: "COEP Technological University", department: "Information Technology", year: 3, scores: { quiz: 80, coding: 130, debugging: 90 }, qualification: { quiz: "qualified", coding: "qualified", debugging: "qualified" } },
-  { uid: "seed-participant-03", name: "Priya Kulkarni", email: "priya.kulkarni@seed.example.com", institution: "VJTI Mumbai", department: "Computer Engineering", year: 3, scores: { quiz: 60, coding: 112 }, qualification: { quiz: "qualified", coding: "qualified" } },
-  { uid: "seed-participant-04", name: "Aditya Deshmukh", email: "aditya.deshmukh@seed.example.com", institution: "BITS Pilani, Goa Campus", department: "Computer Science", year: 2, scores: { quiz: 48 }, qualification: { quiz: "not_qualified" } },
-  { uid: "seed-participant-05", name: "Sneha Joshi", email: "sneha.joshi@seed.example.com", institution: "NIT Surathkal", department: "Artificial Intelligence", year: 4, scores: { quiz: 75, coding: 105, debugging: 80 }, qualification: { quiz: "qualified", coding: "qualified", debugging: "qualified" } },
-  { uid: "seed-participant-06", name: "Rahul Verma", email: "rahul.verma@seed.example.com", institution: "IIT Delhi", department: "Mathematics and Computing", year: 4, scores: { quiz: 82 }, qualification: { quiz: "qualified" } },
-  { uid: "seed-participant-07", name: "Ananya Iyer", email: "ananya.iyer@seed.example.com", institution: "IIIT Hyderabad", department: "Computer Science", year: 3, scores: { quiz: 56 }, qualification: { quiz: "not_qualified" } },
-  { uid: "seed-participant-08", name: "Karan Shah", email: "karan.shah@seed.example.com", institution: "DA-IICT Gandhinagar", department: "Information and Communication Technology", year: 2, scores: { quiz: 68, coding: 72 }, qualification: { quiz: "qualified", coding: "not_qualified" } },
+export const SEEDED_INDIAN_PARTICIPANTS: SeedParticipant[] = [
+  {
+    uid: "seed-participant-01",
+    name: "Aditi Sharma",
+    email: "aditi.sharma@seed.example.com",
+    username: "aditi_sharma",
+    password: "Password@Aditi2026#",
+    institution: "IIT Bombay",
+    department: "Computer Science",
+    year: 4,
+    scores: { quiz: 90, coding: 170, debugging: 150, final: 250 },
+    qualification: { quiz: "qualified", coding: "qualified", debugging: "qualified", final: "qualified" },
+  },
+  {
+    uid: "seed-participant-02",
+    name: "Rohan Patil",
+    email: "rohan.patil@seed.example.com",
+    username: "rohan_patil",
+    password: "Password@Rohan2026#",
+    institution: "COEP Technological University",
+    department: "Information Technology",
+    year: 3,
+    scores: { quiz: 80, coding: 130, debugging: 90 },
+    qualification: { quiz: "qualified", coding: "qualified", debugging: "qualified" },
+  },
+  {
+    uid: "seed-participant-03",
+    name: "Priya Kulkarni",
+    email: "priya.kulkarni@seed.example.com",
+    username: "priya_kulkarni",
+    password: "Password@Priya2026#",
+    institution: "VJTI Mumbai",
+    department: "Computer Engineering",
+    year: 3,
+    scores: { quiz: 60, coding: 112 },
+    qualification: { quiz: "qualified", coding: "qualified" },
+  },
+  {
+    uid: "seed-participant-04",
+    name: "Aditya Deshmukh",
+    email: "aditya.deshmukh@seed.example.com",
+    username: "aditya_deshmukh",
+    password: "Password@Aditya2026#",
+    institution: "BITS Pilani, Goa Campus",
+    department: "Computer Science",
+    year: 2,
+    scores: { quiz: 48 },
+    qualification: { quiz: "not_qualified" },
+  },
+  {
+    uid: "seed-participant-05",
+    name: "Sneha Joshi",
+    email: "sneha.joshi@seed.example.com",
+    username: "sneha_joshi",
+    password: "Password@Sneha2026#",
+    institution: "NIT Surathkal",
+    department: "Artificial Intelligence",
+    year: 4,
+    scores: { quiz: 75, coding: 105, debugging: 80 },
+    qualification: { quiz: "qualified", coding: "qualified", debugging: "qualified" },
+  },
+  {
+    uid: "seed-participant-06",
+    name: "Rahul Verma",
+    email: "rahul.verma@seed.example.com",
+    username: "rahul_verma",
+    password: "Password@Rahul2026#",
+    institution: "IIT Delhi",
+    department: "Mathematics and Computing",
+    year: 4,
+    scores: { quiz: 82 },
+    qualification: { quiz: "qualified" },
+  },
+  {
+    uid: "seed-participant-07",
+    name: "Ananya Iyer",
+    email: "ananya.iyer@seed.example.com",
+    username: "ananya_iyer",
+    password: "Password@Ananya2026#",
+    institution: "IIIT Hyderabad",
+    department: "Computer Science",
+    year: 3,
+    scores: { quiz: 56 },
+    qualification: { quiz: "not_qualified" },
+  },
+  {
+    uid: "seed-participant-08",
+    name: "Karan Shah",
+    email: "karan.shah@seed.example.com",
+    username: "karan_shah",
+    password: "Password@Karan2026#",
+    institution: "DA-IICT Gandhinagar",
+    department: "Information and Communication Technology",
+    year: 2,
+    scores: { quiz: 68, coding: 72 },
+    qualification: { quiz: "qualified", coding: "not_qualified" },
+  },
 ];
 
 const questions = {
@@ -41,6 +133,41 @@ const privateQuestions = {
   final: { "final-q-01": [{ id: "final-q-01-hidden", input: "2 1 1 2 0.8\n1 2 4 0.9", expectedOutput: "4", points: 300, isHidden: true }] },
 };
 
+export function generateCredentialsReportText(): string {
+  const lines: string[] = [
+    "================================================================================",
+    "CODE BATTLE 2026 — SEEDED PARTICIPANT CREDENTIALS REPORT",
+    "Generated: " + new Date().toISOString(),
+    "Environment: Development / Test (Synthetic Seed Fixtures)",
+    "Authentication: Firebase Authentication & Realtime Database",
+    "Security: Passwords hashed via scrypt/bcrypt in auth mechanism. NEVER COMMIT.",
+    "================================================================================",
+    "",
+  ];
+
+  SEEDED_INDIAN_PARTICIPANTS.forEach((p, idx) => {
+    const totalScore = Object.values(p.scores).reduce((a, b) => a + b, 0);
+    const qualifiedRounds = Object.entries(p.qualification)
+      .filter(([_, q]) => q === "qualified")
+      .map(([r]) => r.toUpperCase())
+      .join(", ") || "NONE";
+
+    lines.push(`[PARTICIPANT #${idx + 1}]`);
+    lines.push(`Database ID:        ${p.uid}`);
+    lines.push(`Full Name:          ${p.name}`);
+    lines.push(`Login ID (Email):   ${p.email}`);
+    lines.push(`Username:           ${p.username}`);
+    lines.push(`Password:           ${p.password}`);
+    lines.push(`Institution:        ${p.institution}`);
+    lines.push(`Department & Year:  ${p.department} (Year ${p.year})`);
+    lines.push(`Cumulative Score:   ${totalScore} pts`);
+    lines.push(`Qualified Rounds:   ${qualifiedRounds}`);
+    lines.push("--------------------------------------------------------------------------------");
+  });
+
+  return lines.join("\n");
+}
+
 export async function seedCompetitionData(): Promise<{ success: boolean; message: string }> {
   if (process.env.NODE_ENV === "production") {
     throw new Error("Development seed data cannot run in production.");
@@ -48,9 +175,36 @@ export async function seedCompetitionData(): Promise<{ success: boolean; message
 
   const db = admin.database();
   const firestore = admin.firestore();
+  const auth = admin.auth();
   const now = "2026-10-18T08:00:00.000Z";
+
+  // 1. Provision Firebase Authentication for all seeded participants
+  for (const participant of SEEDED_INDIAN_PARTICIPANTS) {
+    try {
+      await auth.getUser(participant.uid);
+      await auth.updateUser(participant.uid, {
+        email: participant.email,
+        displayName: participant.name,
+        password: participant.password,
+        emailVerified: true,
+      });
+    } catch (err: unknown) {
+      const code = (err as { code?: string })?.code;
+      if (code === "auth/user-not-found") {
+        await auth.createUser({
+          uid: participant.uid,
+          email: participant.email,
+          displayName: participant.name,
+          password: participant.password,
+          emailVerified: true,
+        });
+      }
+    }
+  }
+
+  // 2. Realtime Database updates
   const updates: Record<string, unknown> = {
-    [`competitions/${COMPETITION_ID}`]: { id: COMPETITION_ID, title: "Code Battle 2026 — Spring Grand Prix", description: "Synthetic development competition for testing the complete four-round pipeline.", rules: "Development-only seeded records. Scores and identities are synthetic.", startDate: "2026-10-18T09:00:00Z", endDate: "2026-10-19T21:00:00Z", registrationDeadline: "2026-10-18T23:59:59Z", status: "live", currentRound: "coding", durationHours: 36, maxTeams: participants.length, createdAt: now, updatedAt: now, seedSource: SEED_SOURCE },
+    [`competitions/${COMPETITION_ID}`]: { id: COMPETITION_ID, title: "Code Battle 2026 — Spring Grand Prix", description: "Synthetic development competition for testing the complete four-round pipeline.", rules: "Development-only seeded records. Scores and identities are synthetic.", startDate: "2026-10-18T09:00:00Z", endDate: "2026-10-19T21:00:00Z", registrationDeadline: "2026-10-18T23:59:59Z", status: "live", currentRound: "coding", durationHours: 36, maxTeams: SEEDED_INDIAN_PARTICIPANTS.length, createdAt: now, updatedAt: now, seedSource: SEED_SOURCE },
     [`rounds/${COMPETITION_ID}/quiz`]: { id: 1, slug: "quiz", name: "Round 1: Quiz Battle", status: "available", maxScore: 100, durationMinutes: 20, questionCount: 2, qualificationCutoff: 60, shortDescription: "Fundamentals and algorithmic reasoning.", description: "A scored multiple-choice round.", startTime: "2026-10-18T10:00:00Z", endTime: "2026-10-18T12:00:00Z", requiresQualificationToAdvance: true, unlockConditionText: "Open to registered participants.", rules: ["Two questions in the seeded development dataset."], iconName: "Brain", color: "violet", seedSource: SEED_SOURCE },
     [`rounds/${COMPETITION_ID}/coding`]: { id: 2, slug: "coding", name: "Round 2: Coding Battle", status: "locked", maxScore: 200, durationMinutes: 90, questionCount: 1, qualificationCutoff: 100, shortDescription: "Algorithmic problem solving.", description: "A code-evaluation round.", startTime: "2026-10-18T12:30:00Z", endTime: "2026-10-18T14:00:00Z", requiresQualificationToAdvance: true, unlockConditionText: "Requires qualification in Quiz Battle.", rules: ["Source code is evaluated by the server."], iconName: "Code2", color: "cyan", seedSource: SEED_SOURCE },
     [`rounds/${COMPETITION_ID}/debugging`]: { id: 3, slug: "debugging", name: "Round 3: Debugging Battle", status: "locked", maxScore: 180, durationMinutes: 45, questionCount: 1, qualificationCutoff: 75, shortDescription: "Repair flawed algorithms.", description: "A debugging and invariant round.", startTime: "2026-10-18T15:00:00Z", endTime: "2026-10-18T16:30:00Z", requiresQualificationToAdvance: true, unlockConditionText: "Requires qualification in Coding Battle.", rules: ["Submit a minimal correction."], iconName: "Bug", color: "amber", seedSource: SEED_SOURCE },
@@ -61,9 +215,9 @@ export async function seedCompetitionData(): Promise<{ success: boolean; message
   };
 
   const batch = firestore.batch();
-  for (const participant of participants) {
-    batch.set(firestore.collection("users").doc(participant.uid), { uid: participant.uid, displayName: participant.name, email: participant.email, institution: participant.institution, department: participant.department, academicYear: participant.year, role: "participant", accountStatus: "active", emailVerified: true, seedSource: SEED_SOURCE, createdAt: now, updatedAt: now }, { merge: true });
-    updates[`users/${participant.uid}`] = { uid: participant.uid, displayName: participant.name, email: participant.email, institution: participant.institution, role: "participant", status: "active", createdAt: now, seedSource: SEED_SOURCE };
+  for (const participant of SEEDED_INDIAN_PARTICIPANTS) {
+    batch.set(firestore.collection("users").doc(participant.uid), { uid: participant.uid, displayName: participant.name, email: participant.email, username: participant.username, institution: participant.institution, department: participant.department, academicYear: participant.year, role: "participant", accountStatus: "active", emailVerified: true, seedSource: SEED_SOURCE, createdAt: now, updatedAt: now }, { merge: true });
+    updates[`users/${participant.uid}`] = { uid: participant.uid, displayName: participant.name, email: participant.email, username: participant.username, institution: participant.institution, role: "participant", status: "active", createdAt: now, seedSource: SEED_SOURCE };
     updates[`registrations/${COMPETITION_ID}/${participant.uid}`] = { participantId: participant.uid, competitionId: COMPETITION_ID, registeredAt: now, status: "registered", seedSource: SEED_SOURCE };
     updates[`scores/${COMPETITION_ID}/${participant.uid}`] = { ...participant.scores, userName: participant.name, userEmail: participant.email, lastUpdated: now, seedSource: SEED_SOURCE };
     updates[`participantProgress/${COMPETITION_ID}/${participant.uid}`] = { currentRound: Object.keys(participant.scores).length, seedSource: SEED_SOURCE, updatedAt: now };
@@ -88,5 +242,19 @@ export async function seedCompetitionData(): Promise<{ success: boolean; message
   await db.ref().update(updates);
   await batch.commit();
   await recalculateLeaderboard(COMPETITION_ID);
-  return { success: true, message: `Development seed ${SEED_SOURCE} is installed idempotently for ${participants.length} synthetic participants.` };
+
+  // 3. Write credentials report file to workspace root if accessible
+  try {
+    const credsPath = path.resolve(process.cwd(), "..", "seeded-participant-credentials.txt");
+    fs.writeFileSync(credsPath, generateCredentialsReportText(), "utf-8");
+  } catch {
+    // fallback if directory differs
+    try {
+      fs.writeFileSync("seeded-participant-credentials.txt", generateCredentialsReportText(), "utf-8");
+    } catch {
+      // ignore
+    }
+  }
+
+  return { success: true, message: `Development seed ${SEED_SOURCE} is installed idempotently for ${SEEDED_INDIAN_PARTICIPANTS.length} synthetic participants.` };
 }

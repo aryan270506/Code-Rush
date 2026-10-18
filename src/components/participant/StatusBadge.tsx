@@ -17,11 +17,12 @@ interface StatusBadgeProps {
 }
 
 export const StatusBadge: React.FC<StatusBadgeProps> = ({
-  status,
+  status = "unknown",
   size = "md",
   className = "",
 }) => {
-  const norm = status.toLowerCase();
+  const safeStatus = typeof status === "string" ? status : String(status || "unknown");
+  const norm = (safeStatus || "unknown").toLowerCase();
 
   const sizeClasses = {
     sm: "px-2 py-0.5 text-[10px] gap-1",
