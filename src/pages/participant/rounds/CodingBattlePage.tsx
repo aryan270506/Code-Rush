@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import {
+  CODING_PROBLEMS,
   participantService,
 } from "../../../services/participantService";
 import { realtimeDbService } from "../../../services/realtimeDbService";
@@ -25,9 +26,6 @@ import { RoundAccessGuard } from "../../../components/participant/RoundAccessGua
 
 const CodingBattleWorkspace: React.FC = () => {
   const { user } = useAuth();
-  const [problems, setProblems] = useState<CodingProblem[]>([]);
-  const [isLoadingProblems, setIsLoadingProblems] = useState(true);
-  const [problemError, setProblemError] = useState<string | null>(null);
   const [selectedProblemIndex, setSelectedProblemIndex] = useState(0);
   const [language, setLanguage] = useState<string>("python");
   const [code, setCode] = useState<string>("");
@@ -56,30 +54,14 @@ const CodingBattleWorkspace: React.FC = () => {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiType, setAiType] = useState<"hint" | "explanation">("hint");
 
-  useEffect(() => {
-    participantService.getRoundProblems("coding")
-      .then(setProblems)
-      .catch(() => setProblemError("Coding challenges are unavailable right now."))
-      .finally(() => setIsLoadingProblems(false));
-  }, []);
-
-  const problem = problems[selectedProblemIndex] as CodingProblem | undefined;
+  const problem: CodingProblem = CODING_PROBLEMS[selectedProblemIndex] || CODING_PROBLEMS[0];
 
   // Initialize or reset starter code when problem or language changes
   useEffect(() => {
-    if (!problem) return;
     const starter = problem.starterCode[language] || problem.starterCode["python"] || "";
     setCode(starter);
     setTestResults(null);
   }, [problem, language]);
-
-  if (isLoadingProblems) {
-    return <div className="flex min-h-[40vh] items-center justify-center text-text-secondary">Loading coding challenges...</div>;
-  }
-
-  if (problemError || !problem) {
-    return <div className="flex min-h-[40vh] items-center justify-center text-text-secondary">{problemError || "No coding challenges are published."}</div>;
-  }
 
   const handleRunSampleTests = async () => {
     setIsRunningTests(true);
@@ -187,7 +169,7 @@ const CodingBattleWorkspace: React.FC = () => {
 
         {/* Problem selector tabs */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
-          {problems.map((p, idx) => (
+          {CODING_PROBLEMS.map((p, idx) => (
             <button
               key={p.id}
               onClick={() => setSelectedProblemIndex(idx)}

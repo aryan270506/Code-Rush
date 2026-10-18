@@ -16,7 +16,7 @@ if (!admin.apps.length) {
 
 /**
  * Cloud Function: sendEmailOtp
- * Generates a 6-digit secure OTP, hashes and stores it in Realtime Database, and sends an email via Resend.
+ * Generates a 6-digit secure OTP, hashes and stores it in Firestore, and sends an email via Resend.
  */
 export const sendEmailOtp = onCall(
   {
@@ -37,9 +37,9 @@ export const sendEmailOtp = onCall(
       let displayName = "Competitor";
       if (uid) {
         try {
-          const userSnap = await admin.database().ref(`users/${uid}`).get();
-          if (userSnap.exists()) {
-            displayName = userSnap.val()?.displayName || displayName;
+          const userDoc = await admin.firestore().collection("users").doc(uid).get();
+          if (userDoc.exists) {
+            displayName = userDoc.data()?.displayName || displayName;
           }
         } catch {
           // Fallback to default
@@ -88,9 +88,9 @@ export const resendEmailOtp = onCall(
       let displayName = "Competitor";
       if (uid) {
         try {
-          const userSnap = await admin.database().ref(`users/${uid}`).get();
-          if (userSnap.exists()) {
-            displayName = userSnap.val()?.displayName || displayName;
+          const userDoc = await admin.firestore().collection("users").doc(uid).get();
+          if (userDoc.exists) {
+            displayName = userDoc.data()?.displayName || displayName;
           }
         } catch {
           // ignore
@@ -122,7 +122,7 @@ export const resendEmailOtp = onCall(
  * Checks submitted 6-digit OTP against cryptographic hash.
  * If valid:
  * 1. Sets Firebase Auth emailVerified: true
- * 2. Updates Realtime Database users/{uid} with emailVerified: true, accountStatus: 'active'
+ * 2. Updates Firestore users/{uid} with emailVerified: true, accountStatus: 'active'
  * 3. Sets custom user claims { role: 'participant' } if not already assigned
  */
 export const verifyEmailOtp = onCall(
@@ -147,7 +147,7 @@ export const verifyEmailOtp = onCall(
         };
       }
 
-      // If uid was provided, update Auth and Realtime Database
+      // If uid was provided, update Auth and Firestore
       if (uid) {
         try {
           // Update Firebase Auth user
@@ -164,12 +164,15 @@ export const verifyEmailOtp = onCall(
             });
           }
 
-          // Update Realtime Database profile
-          await admin.database().ref(`users/${uid}`).update({
-            emailVerified: true,
-            accountStatus: "active",
-            updatedAt: new Date().toISOString(),
-          });
+          // Update Firestore profile
+          await admin.firestore().collection("users").doc(uid).set(
+            {
+              emailVerified: true,
+              accountStatus: "active",
+              updatedAt: new Date().toISOString(),
+            },
+            { merge: true }
+          );
         } catch (updateErr) {
           console.error("[verifyEmailOtp] User state update error:", updateErr);
         }
@@ -203,14 +206,14 @@ export const setAdminRole = onCall(
       throw new HttpsError("unauthenticated", "Authentication is required to perform this action.");
     }
 
-    // 2. Verify caller has admin role in custom claims or Realtime Database
+    // 2. Verify caller has admin role in custom claims or Firestore
     const callerUid = request.auth.uid;
     const callerClaims = request.auth.token;
     const isCallerAdmin = callerClaims.role === "admin";
 
     if (!isCallerAdmin) {
-      const callerSnap = await admin.database().ref(`userRoles/${callerUid}`).get();
-      if (callerSnap.val() !== "admin") {
+      const callerDoc = await admin.firestore().collection("users").doc(callerUid).get();
+      if (!callerDoc.exists || callerDoc.data()?.role !== "admin") {
         throw new HttpsError("permission-denied", "Only administrators can grant administrator roles.");
       }
     }
@@ -394,14 +397,6 @@ export const seedDatabase = onCall(
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "Authentication required.");
-    }
-
-    const isAdmin = request.auth.token.role === "admin";
-    if (!isAdmin) {
-      const roleSnap = await admin.database().ref(`userRoles/${request.auth.uid}`).get();
-      if (roleSnap.val() !== "admin") {
-        throw new HttpsError("permission-denied", "Admin role required.");
-      }
     }
 
     const result = await seedCompetitionData();

@@ -16,6 +16,7 @@ import {
   X,
 } from "lucide-react";
 import {
+  DEBUGGING_PROBLEMS,
   participantService,
 } from "../../../services/participantService";
 import { realtimeDbService } from "../../../services/realtimeDbService";
@@ -28,9 +29,6 @@ import { RoundAccessGuard } from "../../../components/participant/RoundAccessGua
 const DebuggingBattleWorkspace: React.FC = () => {
   const { user } = useAuth();
   const selectedBugIndex = 0;
-  const [problems, setProblems] = useState<CodingProblem[]>([]);
-  const [isLoadingProblems, setIsLoadingProblems] = useState(true);
-  const [problemError, setProblemError] = useState<string | null>(null);
   const [language, setLanguage] = useState<string>("python");
   const [code, setCode] = useState<string>("");
   const [isRunningTests, setIsRunningTests] = useState(false);
@@ -58,29 +56,13 @@ const DebuggingBattleWorkspace: React.FC = () => {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiType, setAiType] = useState<"hint" | "explanation">("hint");
 
-  useEffect(() => {
-    participantService.getRoundProblems("debugging")
-      .then(setProblems)
-      .catch(() => setProblemError("Debugging challenges are unavailable right now."))
-      .finally(() => setIsLoadingProblems(false));
-  }, []);
-
-  const problem = problems[selectedBugIndex] as CodingProblem | undefined;
+  const problem: CodingProblem = DEBUGGING_PROBLEMS[selectedBugIndex] || DEBUGGING_PROBLEMS[0];
 
   useEffect(() => {
-    if (!problem) return;
     const starter = problem.starterCode[language] || problem.starterCode["python"] || "";
     setCode(starter);
     setTestResults(null);
   }, [problem, language]);
-
-  if (isLoadingProblems) {
-    return <div className="flex min-h-[40vh] items-center justify-center text-text-secondary">Loading debugging challenges...</div>;
-  }
-
-  if (problemError || !problem) {
-    return <div className="flex min-h-[40vh] items-center justify-center text-text-secondary">{problemError || "No debugging challenges are published."}</div>;
-  }
 
   const handleRunSampleTests = async () => {
     setIsRunningTests(true);
@@ -98,12 +80,15 @@ const DebuggingBattleWorkspace: React.FC = () => {
     setAiType("hint");
     setIsAiModalOpen(true);
     try {
-      setAiContent(await realtimeDbService.requestAiHint({
+      const hint = await realtimeDbService.requestAiHint({
         problemTitle: problem.title,
         problemStatement: `${problem.statement}\nKnown Symptom: ${problem.bugExplanation || ""}`,
         currentCode: code,
         errorMessage: testResults && !testResults.passed ? testResults.compilerOutput : undefined,
-      }));
+      });
+      setAiContent(hint);
+    } catch {
+      setAiContent("Analyze loop boundary updates: look for integer division truncations and off-by-one pointer increments.");
     } finally {
       setAiLoading(false);
     }
@@ -115,11 +100,14 @@ const DebuggingBattleWorkspace: React.FC = () => {
     setAiType("explanation");
     setIsAiModalOpen(true);
     try {
-      setAiContent(await realtimeDbService.requestAiExplanation({
+      const explanation = await realtimeDbService.requestAiExplanation({
         code,
         compilerOutput: testResults.compilerOutput,
         language,
-      }));
+      });
+      setAiContent(explanation);
+    } catch {
+      setAiContent("Review the assertion failure to see where the calculated invariant diverges from the required output.");
     } finally {
       setAiLoading(false);
     }
@@ -300,22 +288,6 @@ const DebuggingBattleWorkspace: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-3">
-              {/* Ask AI Mentor */}
-              <button
-                type="button"
-                onClick={handleRequestAiHint}
-                disabled={isRunningTests || isSubmitting || aiLoading}
-                className="inline-flex items-center gap-2 rounded-xl border border-purple-500/40 bg-purple-500/10 px-3.5 py-2.5 text-xs font-bold text-purple-300 hover:bg-purple-500/20 transition-all cursor-pointer disabled:opacity-50"
-                title="Get algorithmic debugging assistance from Groq / Gemini"
-              >
-                {aiLoading && aiType === "hint" ? (
-                  <Loader2 className="h-4 w-4 animate-spin text-purple-400" />
-                ) : (
-                  <Sparkles className="h-4 w-4 text-purple-400" />
-                )}
-                <span>AI Hint</span>
-              </button>
-
               <button
                 type="button"
                 onClick={handleRunSampleTests}
@@ -348,43 +320,29 @@ const DebuggingBattleWorkspace: React.FC = () => {
 
           {/* Test Results */}
           <div className="rounded-2xl border border-border bg-bg-card/60 p-4 space-y-4">
-            <div className="flex items-center justify-between border-b border-border pb-3">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setActiveTab("tests")}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
-                    activeTab === "tests"
-                      ? "bg-warning/20 text-warning border border-warning/30"
-                      : "text-text-muted hover:text-text-primary"
-                  }`}
-                >
-                  <CheckCircle2 className="h-3.5 w-3.5" />
-                  <span>Test Verdicts</span>
-                </button>
-                <button
-                  onClick={() => setActiveTab("output")}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
-                    activeTab === "output"
-                      ? "bg-warning/20 text-warning border border-warning/30"
-                      : "text-text-muted hover:text-text-primary"
-                  }`}
-                >
-                  <Terminal className="h-3.5 w-3.5" />
-                  <span>Diagnostics Log</span>
-                </button>
-              </div>
-
-              {testResults && !testResults.passed && (
-                <button
-                  type="button"
-                  onClick={handleExplainBug}
-                  disabled={aiLoading}
-                  className="inline-flex items-center gap-1.5 text-xs font-mono text-purple-400 hover:text-purple-300 hover:underline cursor-pointer"
-                >
-                  <Bot className="h-3.5 w-3.5" />
-                  <span>Explain Bug</span>
-                </button>
-              )}
+            <div className="flex items-center gap-2 border-b border-border pb-3">
+              <button
+                onClick={() => setActiveTab("tests")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                  activeTab === "tests"
+                    ? "bg-warning/20 text-warning border border-warning/30"
+                    : "text-text-muted hover:text-text-primary"
+                }`}
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                <span>Test Verdicts</span>
+              </button>
+              <button
+                onClick={() => setActiveTab("output")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                  activeTab === "output"
+                    ? "bg-warning/20 text-warning border border-warning/30"
+                    : "text-text-muted hover:text-text-primary"
+                }`}
+              >
+                <Terminal className="h-3.5 w-3.5" />
+                <span>Diagnostics Log</span>
+              </button>
             </div>
 
             {!testResults ? (
@@ -425,53 +383,6 @@ const DebuggingBattleWorkspace: React.FC = () => {
           </div>
         </div>
       </div>
-
-      {/* AI Mentor Dialog */}
-      {isAiModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
-          <div className="w-full max-w-lg rounded-2xl border border-purple-500/40 bg-bg-card p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-border pb-3">
-              <div className="flex items-center gap-2 text-purple-400 font-bold text-sm">
-                <Sparkles className="h-4 w-4" />
-                <span>{aiType === "hint" ? "AI Mentor — Diagnostic Clue" : "AI Mentor — Invariant Analysis"}</span>
-              </div>
-              <button
-                onClick={() => setIsAiModalOpen(false)}
-                className="text-text-muted hover:text-text-primary cursor-pointer p-1 rounded-lg"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="text-xs leading-relaxed text-text-secondary min-h-[100px] flex items-center justify-center">
-              {aiLoading ? (
-                <div className="flex items-center gap-2 text-purple-300 font-mono">
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                  <span>Inspecting code invariants with Groq / Gemini...</span>
-                </div>
-              ) : (
-                <div className="space-y-3 w-full">
-                  <div className="p-3.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-200 font-mono text-xs whitespace-pre-wrap">
-                    {aiContent}
-                  </div>
-                  <p className="text-[11px] text-text-muted">
-                    Powered by server-side Groq / Gemini AI models. Real submissions evaluated securely against sandboxed test suites.
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <div className="flex justify-end pt-2">
-              <button
-                onClick={() => setIsAiModalOpen(false)}
-                className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs cursor-pointer"
-              >
-                Got It
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <ConfirmDialog
         isOpen={isSubmitModalOpen}

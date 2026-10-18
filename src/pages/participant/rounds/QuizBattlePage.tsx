@@ -12,6 +12,7 @@ import {
   Trophy,
   ArrowRight,
   ShieldAlert,
+  RotateCcw,
 } from "lucide-react";
 import { participantService } from "../../../services/participantService";
 import type { QuizQuestion, QuizSubmission } from "../../../types/participant";
@@ -71,7 +72,13 @@ export const QuizBattlePage: React.FC = () => {
     return () => clearInterval(interval);
   }, [gameState, answers]);
 
-  const handleStartQuiz = () => {
+  const handleStartQuiz = async () => {
+    let qList = questions;
+    if (!qList || qList.length === 0) {
+      qList = await participantService.getQuizQuestions();
+      setQuestions(qList);
+    }
+    setCurrentIndex(0);
     setGameState("active");
     setTimeLeft(20 * 60);
   };
@@ -251,7 +258,16 @@ export const QuizBattlePage: React.FC = () => {
   // ─────────────────────────────────────────────────────────────────────
   // VIEW 2: ACTIVE QUIZ WORKSPACE
   // ─────────────────────────────────────────────────────────────────────
-  if (gameState === "active" && currentQ) {
+  if (gameState === "active") {
+    if (!currentQ) {
+      return (
+        <div className="max-w-4xl mx-auto py-16 text-center space-y-4">
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-violet-primary border-t-transparent" />
+          <p className="text-sm font-mono text-text-secondary">Loading Quiz Battle Questions...</p>
+        </div>
+      );
+    }
+
     const isCurrentMarked = markedForReview.has(currentQ.id);
 
     return (
@@ -536,13 +552,31 @@ export const QuizBattlePage: React.FC = () => {
 
       {/* Action Buttons */}
       <div className="flex flex-col sm:flex-row gap-4 justify-between items-center">
-        <Link
-          to="/participant/competition"
-          className="inline-flex items-center gap-2 rounded-xl border border-border bg-bg-card px-5 py-3 text-xs font-semibold text-text-secondary hover:text-text-primary transition-colors"
-        >
-          <ChevronLeft className="h-4 w-4" />
-          <span>Return to Competition Pipeline</span>
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link
+            to="/participant/competition"
+            className="inline-flex items-center gap-2 rounded-xl border border-border bg-bg-card px-5 py-3 text-xs font-semibold text-text-secondary hover:text-text-primary transition-colors"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            <span>Return to Pipeline</span>
+          </Link>
+
+          <button
+            type="button"
+            onClick={() => {
+              participantService.clearQuizSubmission();
+              setAnswers({});
+              setMarkedForReview(new Set());
+              setCurrentIndex(0);
+              setEvaluationResult(null);
+              handleStartQuiz();
+            }}
+            className="inline-flex items-center gap-2 rounded-xl border border-violet-primary/40 bg-violet-primary/10 hover:bg-violet-primary/20 px-5 py-3 text-xs font-bold text-violet-light transition-all cursor-pointer"
+          >
+            <RotateCcw className="h-4 w-4" />
+            <span>Retake / Enter Quiz Arena</span>
+          </button>
+        </div>
 
         {isQualified ? (
           <Link

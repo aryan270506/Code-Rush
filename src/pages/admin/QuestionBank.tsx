@@ -863,7 +863,7 @@ export default function QuestionBank() {
         isOpen={aiDraftModalOpen}
         onClose={() => !isGeneratingAi && setAiDraftModalOpen(false)}
         title="AI Challenge Generator (Groq & Gemini)"
-        maxWidth="md"
+        size="md"
       >
         <div className="space-y-4">
           <div className="p-3.5 rounded-xl border border-violet-primary/40 bg-violet-primary/10 text-xs text-text-secondary flex items-start gap-3">
@@ -942,7 +942,7 @@ export default function QuestionBank() {
                 }
                 setIsGeneratingAi(true);
                 try {
-                  const draft: any = await realtimeDbService.generateQuestionDraft({
+                  const draft = await realtimeDbService.generateQuestionDraft({
                     topic: aiTopic,
                     roundType: aiRoundType,
                     difficulty: aiDifficulty,

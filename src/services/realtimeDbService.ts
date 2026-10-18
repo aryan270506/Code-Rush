@@ -10,7 +10,6 @@ import {
 } from "firebase/database";
 import { httpsCallable } from "firebase/functions";
 import { rtdb, functions } from "../lib/firebase";
-import type { TestCase as AdminTestCase } from "../types/admin";
 
 export const DEFAULT_COMPETITION_ID = "comp-2026-spring";
 
@@ -39,14 +38,6 @@ export interface DBRound {
   questionCount: number;
   qualificationCutoff: number;
   shortDescription: string;
-  description?: string;
-  requiresQualificationToAdvance?: boolean;
-  unlockConditionText?: string;
-  startTime?: string;
-  endTime?: string;
-  rules?: string[];
-  iconName?: string;
-  color?: "violet" | "cyan" | "amber" | "purple";
 }
 
 export interface DBQuestion {
@@ -67,11 +58,6 @@ export interface DBQuestion {
   starterCode?: Record<string, string>;
   options?: Array<{ id: string; text: string }>;
   sampleCases?: Array<{ input: string; output: string; explanation?: string }>;
-  buggyCode?: Record<string, string>;
-  explanation?: string;
-  supportedLanguages?: string[];
-  executionTimeLimitMs?: number;
-  memoryLimitMb?: number;
 }
 
 export interface DBSubmission {
@@ -89,7 +75,6 @@ export interface DBSubmission {
   executionTimeMs: number;
   compilerOutput: string;
   submittedAt: string;
-  code?: string;
 }
 
 export interface DBLeaderboardItem {
@@ -113,25 +98,6 @@ export interface DBAnnouncement {
   author: string;
   timestamp: string;
   priority: "high" | "medium" | "low";
-}
-
-export interface QuestionDraft {
-  title?: string;
-  points?: number;
-  statement?: string;
-  description?: string;
-  options?: string[];
-  correctAnswer?: string;
-  explanation?: string;
-  inputFormat?: string;
-  outputFormat?: string;
-  constraints?: string | string[];
-  sampleTestCases?: AdminTestCase[];
-  sampleInput?: string;
-  sampleOutput?: string;
-  hiddenTestCases?: AdminTestCase[];
-  buggyCode?: string;
-  solutionCode?: string;
 }
 
 class RealtimeDatabaseService {
@@ -388,8 +354,7 @@ class RealtimeDatabaseService {
   }): Promise<any> {
     const fn = httpsCallable(functions, "submitQuiz");
     const res = await fn(data);
-    const payload = res.data as { result?: unknown } & Record<string, unknown>;
-    return payload.result ?? payload;
+    return res.data;
   }
 
   async submitCode(data: {
@@ -403,8 +368,7 @@ class RealtimeDatabaseService {
   }): Promise<any> {
     const fn = httpsCallable(functions, "submitCode");
     const res = await fn(data);
-    const payload = res.data as { result?: unknown } & Record<string, unknown>;
-    return payload.result ?? payload;
+    return res.data;
   }
 
   async requestAiHint(data: {
@@ -412,10 +376,9 @@ class RealtimeDatabaseService {
     problemStatement: string;
     currentCode: string;
     errorMessage?: string;
-    language?: string;
   }): Promise<string> {
     try {
-      const fn = httpsCallable<{ problemTitle: string; problemStatement: string; currentCode: string; errorMessage?: string; language?: string }, { success: boolean; hint: string }>(functions, "generateHint");
+      const fn = httpsCallable<{ problemTitle: string; problemStatement: string; currentCode: string; errorMessage?: string }, { success: boolean; hint: string }>(functions, "generateHint");
       const res = await fn(data);
       return res.data?.hint || "Consider evaluating your boundary checks and loop invariants.";
     } catch (err: unknown) {
@@ -440,14 +403,12 @@ class RealtimeDatabaseService {
 
   async generateQuestionDraft(data: {
     topic: string;
-    roundType: "quiz" | "coding" | "debugging" | "final";
-    difficulty: "easy" | "medium" | "hard" | "expert";
-  }): Promise<QuestionDraft> {
+    roundType: "quiz" | "coding" | "debugging";
+    difficulty: "easy" | "medium" | "hard";
+  }): Promise<string> {
     const fn = httpsCallable(functions, "generateQuestion");
     const res = await fn(data);
-    const draft = (res.data as { questionDraft?: QuestionDraft | string })?.questionDraft;
-    if (typeof draft === "object" && draft !== null) return draft;
-    return draft ? { statement: draft } : {};
+    return (res.data as any)?.questionDraft || "";
   }
 
   async seedDatabase(): Promise<any> {
