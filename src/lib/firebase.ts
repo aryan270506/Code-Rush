@@ -5,6 +5,7 @@ import {
   type Auth,
 } from "firebase/auth";
 import {
+  initializeFirestore,
   getFirestore,
   connectFirestoreEmulator,
   type Firestore,
@@ -41,7 +42,19 @@ if (!getApps().length) {
 }
 
 export const auth: Auth = getAuth(app);
-export const db: Firestore = getFirestore(app);
+
+// Initialize Firestore with auto-detect long polling to prevent ERR_BLOCKED_BY_CLIENT
+// caused by browser ad-blockers and privacy shields blocking WebChannel streams
+let firestoreInstance: Firestore;
+try {
+  firestoreInstance = initializeFirestore(app, {
+    experimentalAutoDetectLongPolling: true,
+  });
+} catch {
+  firestoreInstance = getFirestore(app);
+}
+export const db: Firestore = firestoreInstance;
+
 export const functions: Functions = getFunctions(app);
 
 // Connect to Local Emulators if configured

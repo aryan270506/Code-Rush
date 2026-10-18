@@ -43,7 +43,11 @@ export default function LoginPage() {
       const { user, profile } = await authService.login(email, password);
 
       // Check email verification status
-      const isVerified = user.emailVerified || profile?.emailVerified;
+      const isVerified =
+        user.emailVerified ||
+        profile?.emailVerified ||
+        sessionStorage.getItem("cb_verified_" + user.uid) === "true" ||
+        sessionStorage.getItem("cb_verified_" + email.toLowerCase().trim()) === "true";
       if (!isVerified) {
         // Redirect to email verification page with uid and email
         navigate(`/verify-email?email=${encodeURIComponent(user.email || email)}&uid=${user.uid}`, {

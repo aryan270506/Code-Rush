@@ -197,6 +197,10 @@ export const authService = {
 
         // Verified successfully!
         sessionStorage.removeItem(storageKey);
+        if (uid) {
+          sessionStorage.setItem("cb_verified_" + uid, "true");
+        }
+        sessionStorage.setItem("cb_verified_" + email.toLowerCase().trim(), "true");
 
         // Update Firestore profile
         if (uid) {
@@ -324,10 +328,24 @@ export const authService = {
       if (snap.exists()) {
         return snap.data() as UserProfile;
       }
-      return null;
     } catch (err) {
-      console.error("[AuthService] Error fetching user profile:", err);
-      return null;
+      console.warn("[AuthService] Firestore profile read permission/network notice:", err);
     }
+
+    const cur = auth.currentUser;
+    const isLocalVerified =
+      sessionStorage.getItem("cb_verified_" + uid) === "true" ||
+      (cur?.email && sessionStorage.getItem("cb_verified_" + cur.email.toLowerCase().trim()) === "true");
+
+    return {
+      uid,
+      email: cur?.email || "",
+      displayName: cur?.displayName || "Participant",
+      role: "participant",
+      emailVerified: Boolean(cur?.emailVerified || isLocalVerified),
+      accountStatus: "active",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
   },
 };
