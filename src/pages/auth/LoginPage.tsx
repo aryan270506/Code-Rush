@@ -96,7 +96,7 @@ export default function LoginPage() {
         return;
       }
 
-      // Role-based redirect verified by server-side Firestore profile
+      // Role-based redirect verified by server-side Realtime Database profile
       const userRole = profile?.role || "participant";
       if (userRole === "admin") {
         navigate("/admin/dashboard", { replace: true });

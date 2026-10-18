@@ -9,14 +9,9 @@ import {
   updateProfile,
   type User,
 } from "firebase/auth";
-import {
-  doc,
-  getDoc,
-  setDoc,
-  serverTimestamp,
-} from "firebase/firestore";
+import { ref, get, set, update } from "firebase/database";
 import { httpsCallable } from "firebase/functions";
-import { auth, db, functions, isFirebaseConfigured } from "../lib/firebase";
+import { auth, rtdb, functions, isFirebaseConfigured } from "../lib/firebase";
 import type { UserProfile, SendOtpResponse, VerifyOtpResponse } from "../types/auth";
 
 /**
@@ -254,7 +249,7 @@ export const authService = {
     const credential = await signInWithEmailAndPassword(auth, email.trim(), password);
     const user = credential.user;
 
-    // Fetch trusted user profile from Firestore
+    // Fetch trusted user profile from Realtime Database
     const profile = await this.getUserProfile(user.uid);
     return { user, profile };
   },
@@ -281,23 +276,23 @@ export const authService = {
     // 2. Set display name in Auth
     await updateProfile(user, { displayName: displayName.trim() });
 
-    // 3. Create initial profile in Firestore with role "participant" and unverified status
-    const initialProfile: Record<string, unknown> = {
+    // 3. Create initial profile in Realtime Database with role "participant" and unverified status
+    const initialProfile: UserProfile = {
       uid: user.uid,
-      email: user.email,
+      email: user.email || "",
       displayName: displayName.trim(),
       role: "participant", // Strictly enforced participant role
       emailVerified: false,
       accountStatus: "pending_verification",
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      serverTimestamp: serverTimestamp(),
     };
 
     try {
-      await setDoc(doc(db, "users", user.uid), initialProfile, { merge: true });
-    } catch (fsErr) {
-      console.warn("[AuthService] Firestore initial profile write warning:", fsErr);
+      await update(ref(rtdb, `users/${user.uid}`), initialProfile);
+      await set(ref(rtdb, `userRoles/${user.uid}`), "participant");
+    } catch (rtdbErr) {
+      console.warn("[AuthService] Realtime Database initial profile write warning:", rtdbErr);
     }
 
     // 4. Request backend Cloud Function or local fallback
@@ -411,20 +406,16 @@ export const authService = {
         }
         sessionStorage.setItem("cb_verified_" + email.toLowerCase().trim(), "true");
 
-        // Update Firestore profile
+        // Update Realtime Database profile
         if (uid) {
           try {
-            await setDoc(
-              doc(db, "users", uid),
-              {
-                emailVerified: true,
-                accountStatus: "active",
-                updatedAt: new Date().toISOString(),
-              },
-              { merge: true }
-            );
+            await update(ref(rtdb, `users/${uid}`), {
+              emailVerified: true,
+              accountStatus: "active",
+              updatedAt: new Date().toISOString(),
+            });
           } catch (updateErr) {
-            console.warn("[AuthService] Firestore profile update warning:", updateErr);
+            console.warn("[AuthService] Realtime Database profile update warning:", updateErr);
           }
         }
 
@@ -534,16 +525,16 @@ export const authService = {
   },
 
   /**
-   * Fetch Firestore user profile document
+   * Fetch Realtime Database user profile document
    */
   async getUserProfile(uid: string): Promise<UserProfile | null> {
     try {
-      const snap = await getDoc(doc(db, "users", uid));
+      const snap = await get(ref(rtdb, `users/${uid}`));
       if (snap.exists()) {
-        return snap.data() as UserProfile;
+        return snap.val() as UserProfile;
       }
     } catch (err) {
-      console.warn("[AuthService] Firestore profile read permission/network notice:", err);
+      console.warn("[AuthService] Realtime Database profile read notice:", err);
     }
 
     const cur = auth.currentUser;

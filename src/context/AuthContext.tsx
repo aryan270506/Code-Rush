@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { type User, onAuthStateChanged } from "firebase/auth";
-import { doc, onSnapshot } from "firebase/firestore";
-import { auth, db } from "../lib/firebase";
+import { ref, onValue, off } from "firebase/database";
+import { auth, rtdb } from "../lib/firebase";
 import { authService, DEMO_CREDENTIALS } from "../services/authService";
 import type { UserProfile, UserRole } from "../types/auth";
 
@@ -67,34 +67,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(firebaseUser);
 
       if (firebaseUser) {
-        // Real-time listener for Firestore user profile updates
+        // Real-time listener for Realtime Database user profile updates
         try {
-          const userDocRef = doc(db, "users", firebaseUser.uid);
-          unsubscribeSnapshot = onSnapshot(
-            userDocRef,
-            (docSnap) => {
-              if (docSnap.exists()) {
-                const profileData = docSnap.data() as UserProfile;
-                setProfile(profileData);
-              } else {
-                const isLocalVerified =
-                  sessionStorage.getItem("cb_verified_" + firebaseUser.uid) === "true";
-                setProfile({
-                  uid: firebaseUser.uid,
-                  email: firebaseUser.email || "",
-                  displayName: firebaseUser.displayName || "Participant",
-                  role: "participant",
-                  emailVerified: firebaseUser.emailVerified || isLocalVerified,
-                  accountStatus: "active",
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString(),
-                });
-              }
-              setLoading(false);
-            },
+          const userRef = ref(rtdb, `users/${firebaseUser.uid}`);
+          const handleValue = (snapshot: any) => {
+            if (snapshot.exists()) {
+              const profileData = snapshot.val() as UserProfile;
+              setProfile(profileData);
+            } else {
+              const isLocalVerified =
+                sessionStorage.getItem("cb_verified_" + firebaseUser.uid) === "true";
+              setProfile({
+                uid: firebaseUser.uid,
+                email: firebaseUser.email || "",
+                displayName: firebaseUser.displayName || "Participant",
+                role: "participant",
+                emailVerified: firebaseUser.emailVerified || isLocalVerified,
+                accountStatus: "active",
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+              });
+            }
+            setLoading(false);
+          };
+
+          onValue(
+            userRef,
+            handleValue,
             (error) => {
               console.warn(
-                "[AuthContext] Firestore permission notice: Using local security profile fallback.",
+                "[AuthContext] RTDB user profile read notice: Using local security profile fallback.",
                 error
               );
               const isLocalVerified =
@@ -112,8 +114,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               setLoading(false);
             }
           );
+
+          unsubscribeSnapshot = () => off(userRef, "value", handleValue);
         } catch (err) {
-          console.warn("[AuthContext] Firestore listen error, using session state:", err);
+          console.warn("[AuthContext] RTDB listen error, using session state:", err);
           const isLocalVerified =
             sessionStorage.getItem("cb_verified_" + firebaseUser.uid) === "true";
           setProfile({

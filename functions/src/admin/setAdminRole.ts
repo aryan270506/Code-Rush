@@ -9,7 +9,7 @@ import * as admin from "firebase-admin";
  */
 export async function assignAdminRole(emailOrUid: string): Promise<{ success: boolean; message: string }> {
   const auth = admin.auth();
-  const db = admin.firestore();
+  const rtdb = admin.database();
 
   let userRecord: admin.auth.UserRecord;
 
@@ -30,16 +30,14 @@ export async function assignAdminRole(emailOrUid: string): Promise<{ success: bo
     adminGrantedAt: new Date().toISOString(),
   });
 
-  // 2. Update Firestore user document
-  await db.collection("users").doc(userRecord.uid).set(
-    {
-      role: "admin",
-      accountStatus: "active",
-      emailVerified: true,
-      updatedAt: new Date().toISOString(),
-    },
-    { merge: true }
-  );
+  // 2. Update Realtime Database user and role records
+  await rtdb.ref(`users/${userRecord.uid}`).update({
+    role: "admin",
+    accountStatus: "active",
+    emailVerified: true,
+    updatedAt: new Date().toISOString(),
+  });
+  await rtdb.ref(`userRoles/${userRecord.uid}`).set("admin");
 
   console.info(`[Admin Provisioning] Successfully elevated user ${userRecord.email} (${userRecord.uid}) to Administrator.`);
   return {

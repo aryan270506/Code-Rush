@@ -23,7 +23,7 @@ export function hashOtp(otp: string, email: string): string {
 }
 
 /**
- * Generates a consistent document ID for an email without exposing plaintext in Firestore keys
+ * Generates a consistent key for an email
  */
 export function getEmailHash(email: string): string {
   return crypto.createHash("sha256").update(email.toLowerCase().trim()).digest("hex");
@@ -33,29 +33,29 @@ export interface StoredOtpRecord {
   emailHash: string;
   hashedOtp: string;
   uid: string;
-  expiresAt: admin.firestore.Timestamp;
+  expiresAt: number;
   attempts: number;
-  lastRequestedAt: admin.firestore.Timestamp;
+  lastRequestedAt: number;
 }
 
 /**
- * Creates and stores a new OTP record in Firestore with TTL and cooldown tracking
+ * Creates and stores a new OTP record in Realtime Database with TTL and cooldown tracking
  */
 export async function createAndStoreOtp(
   email: string,
   uid: string
 ): Promise<{ otp: string; cooldownSeconds: number }> {
-  const db = admin.firestore();
+  const rtdb = admin.database();
   const emailHash = getEmailHash(email);
-  const docRef = db.collection("_email_otps").doc(emailHash);
+  const otpRef = rtdb.ref(`_email_otps/${emailHash}`);
 
   // Check cooldown
-  const existingSnap = await docRef.get();
+  const existingSnap = await otpRef.get();
   const now = Date.now();
 
-  if (existingSnap.exists) {
-    const data = existingSnap.data() as StoredOtpRecord;
-    const lastReq = data.lastRequestedAt?.toMillis() || 0;
+  if (existingSnap.exists()) {
+    const data = existingSnap.val() as StoredOtpRecord;
+    const lastReq = data.lastRequestedAt || 0;
     const diff = now - lastReq;
 
     if (diff < RESEND_COOLDOWN_MS) {
@@ -68,8 +68,8 @@ export async function createAndStoreOtp(
   const otp = generateSecureOTP();
   const hashedOtp = hashOtp(otp, email);
 
-  const expiresAt = admin.firestore.Timestamp.fromMillis(now + OTP_EXPIRY_MS);
-  const lastRequestedAt = admin.firestore.Timestamp.fromMillis(now);
+  const expiresAt = now + OTP_EXPIRY_MS;
+  const lastRequestedAt = now;
 
   const record: StoredOtpRecord = {
     emailHash,
@@ -80,38 +80,38 @@ export async function createAndStoreOtp(
     lastRequestedAt,
   };
 
-  await docRef.set(record);
+  await otpRef.set(record);
   return { otp, cooldownSeconds: 60 };
 }
 
 /**
- * Validates a submitted OTP against the stored hash
+ * Validates a submitted OTP against the stored hash in Realtime Database
  */
 export async function validateOtp(
   email: string,
   submittedOtp: string
 ): Promise<{ valid: boolean; error?: string }> {
-  const db = admin.firestore();
+  const rtdb = admin.database();
   const emailHash = getEmailHash(email);
-  const docRef = db.collection("_email_otps").doc(emailHash);
+  const otpRef = rtdb.ref(`_email_otps/${emailHash}`);
 
-  const snap = await docRef.get();
-  if (!snap.exists) {
+  const snap = await otpRef.get();
+  if (!snap.exists()) {
     return { valid: false, error: "No active verification code found. Please request a new one." };
   }
 
-  const record = snap.data() as StoredOtpRecord;
+  const record = snap.val() as StoredOtpRecord;
   const now = Date.now();
 
   // 1. Check expiration
-  if (now > record.expiresAt.toMillis()) {
-    await docRef.delete();
+  if (now > record.expiresAt) {
+    await otpRef.remove();
     return { valid: false, error: "Verification code has expired. Please request a new one." };
   }
 
   // 2. Check maximum attempts
   if (record.attempts >= MAX_ATTEMPTS) {
-    await docRef.delete();
+    await otpRef.remove();
     return {
       valid: false,
       error: "Too many failed attempts. For your security, this code was invalidated. Please request a new one.",
@@ -122,10 +122,9 @@ export async function validateOtp(
   const computedHash = hashOtp(submittedOtp, email);
   if (computedHash !== record.hashedOtp) {
     // Increment attempts
-    await docRef.update({
-      attempts: admin.firestore.FieldValue.increment(1),
-    });
-    const remaining = MAX_ATTEMPTS - (record.attempts + 1);
+    const newAttempts = (record.attempts || 0) + 1;
+    await otpRef.update({ attempts: newAttempts });
+    const remaining = MAX_ATTEMPTS - newAttempts;
     return {
       valid: false,
       error: `Invalid code. ${remaining} attempt${remaining === 1 ? "" : "s"} remaining.`,
@@ -133,6 +132,6 @@ export async function validateOtp(
   }
 
   // 4. Valid! Single-use: delete record
-  await docRef.delete();
+  await otpRef.remove();
   return { valid: true };
 }

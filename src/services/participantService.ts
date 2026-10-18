@@ -1,6 +1,5 @@
-import { ref, get } from "firebase/database";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
-import { db, rtdb } from "../lib/firebase";
+import { ref, get, update } from "firebase/database";
+import { rtdb } from "../lib/firebase";
 import { realtimeDbService, DEFAULT_COMPETITION_ID } from "./realtimeDbService";
 import type {
   CompetitionRound,
@@ -1819,9 +1818,9 @@ class ParticipantService {
   // 10. Participant Profile
   public async getProfile(uid: string): Promise<ParticipantProfileData | null> {
     try {
-      const snap = await getDoc(doc(db, "users", uid));
+      const snap = await get(ref(rtdb, `users/${uid}`));
       if (snap.exists()) {
-        const u = snap.data();
+        const u = snap.val();
         return {
           displayName: u.displayName || "",
           email: u.email || "",
@@ -1844,7 +1843,7 @@ class ParticipantService {
 
   public async updateProfile(uid: string, data: Partial<ParticipantProfileData>): Promise<void> {
     const { uid: _uid, email: _email, role: _role, emailVerified: _verified, contestStatus: _status, ...editable } = data;
-    await updateDoc(doc(db, "users", uid), {
+    await update(ref(rtdb, `users/${uid}`), {
       ...editable,
       updatedAt: new Date().toISOString(),
     });

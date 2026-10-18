@@ -186,7 +186,7 @@ export const ProfilePage: React.FC = () => {
               <Lock className="h-3.5 w-3.5 text-text-muted mt-0.5 shrink-0" />
               <span>
                 Account email, verification status, and competition scores cannot be edited
-                directly. These are securely calculated and managed by Cloud Firestore rules.
+                directly. These are securely calculated and managed by Firebase Realtime Database rules.
               </span>
             </div>
 

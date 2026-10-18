@@ -174,7 +174,6 @@ export async function seedCompetitionData(): Promise<{ success: boolean; message
   }
 
   const db = admin.database();
-  const firestore = admin.firestore();
   const auth = admin.auth();
   const now = "2026-10-18T08:00:00.000Z";
 
@@ -214,10 +213,23 @@ export async function seedCompetitionData(): Promise<{ success: boolean; message
     [`announcements/${COMPETITION_ID}/seed-announcement`]: { id: "seed-announcement", title: "Development dataset loaded", content: "This competition contains synthetic seed records for development and QA only.", author: "Code Battle Development", timestamp: now, priority: "medium", seedSource: SEED_SOURCE },
   };
 
-  const batch = firestore.batch();
   for (const participant of SEEDED_INDIAN_PARTICIPANTS) {
-    batch.set(firestore.collection("users").doc(participant.uid), { uid: participant.uid, displayName: participant.name, email: participant.email, username: participant.username, institution: participant.institution, department: participant.department, academicYear: participant.year, role: "participant", accountStatus: "active", emailVerified: true, seedSource: SEED_SOURCE, createdAt: now, updatedAt: now }, { merge: true });
-    updates[`users/${participant.uid}`] = { uid: participant.uid, displayName: participant.name, email: participant.email, username: participant.username, institution: participant.institution, role: "participant", status: "active", createdAt: now, seedSource: SEED_SOURCE };
+    updates[`users/${participant.uid}`] = {
+      uid: participant.uid,
+      displayName: participant.name,
+      email: participant.email,
+      username: participant.username,
+      institution: participant.institution,
+      department: participant.department,
+      academicYear: participant.year,
+      role: "participant",
+      accountStatus: "active",
+      emailVerified: true,
+      createdAt: now,
+      updatedAt: now,
+      seedSource: SEED_SOURCE,
+    };
+    updates[`userRoles/${participant.uid}`] = "participant";
     updates[`registrations/${COMPETITION_ID}/${participant.uid}`] = { participantId: participant.uid, competitionId: COMPETITION_ID, registeredAt: now, status: "registered", seedSource: SEED_SOURCE };
     updates[`scores/${COMPETITION_ID}/${participant.uid}`] = { ...participant.scores, userName: participant.name, userEmail: participant.email, lastUpdated: now, seedSource: SEED_SOURCE };
     updates[`participantProgress/${COMPETITION_ID}/${participant.uid}`] = { currentRound: Object.keys(participant.scores).length, seedSource: SEED_SOURCE, updatedAt: now };
@@ -240,7 +252,6 @@ export async function seedCompetitionData(): Promise<{ success: boolean; message
   }
 
   await db.ref().update(updates);
-  await batch.commit();
   await recalculateLeaderboard(COMPETITION_ID);
 
   // 3. Write credentials report file to workspace root if accessible
