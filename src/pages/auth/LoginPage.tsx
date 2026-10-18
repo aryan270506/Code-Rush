@@ -5,7 +5,7 @@ import AuthLayout from "../../components/auth/AuthLayout";
 import AuthFormField from "../../components/auth/AuthFormField";
 import PasswordField from "../../components/auth/PasswordField";
 import { validateEmail } from "../../utils/validation";
-import { authService } from "../../services/authService";
+import { authService, DEMO_CREDENTIALS } from "../../services/authService";
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -175,6 +175,48 @@ export default function LoginPage() {
             </>
           )}
         </button>
+
+        {/* Quick Demo Credentials for Instant Dashboard Testing */}
+        <div className="pt-4 border-t border-border/60">
+          <p className="text-[11px] font-semibold tracking-wider uppercase text-text-muted text-center mb-2.5">
+            ⚡ Quick Demo Logins
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setEmail(DEMO_CREDENTIALS.participant.email);
+                setPassword(DEMO_CREDENTIALS.participant.password);
+                setErrors({});
+              }}
+              className="flex flex-col items-center justify-center p-2.5 rounded-xl border border-border/80 bg-bg-secondary/70 hover:border-violet-primary/50 hover:bg-violet-primary/10 transition-all cursor-pointer text-center group"
+            >
+              <span className="text-xs font-bold text-violet-light group-hover:text-white">
+                Participant Demo
+              </span>
+              <span className="text-[10px] text-text-muted mt-0.5 font-mono">
+                /participant
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setEmail(DEMO_CREDENTIALS.admin.email);
+                setPassword(DEMO_CREDENTIALS.admin.password);
+                setErrors({});
+              }}
+              className="flex flex-col items-center justify-center p-2.5 rounded-xl border border-border/80 bg-bg-secondary/70 hover:border-cyan-primary/50 hover:bg-cyan-primary/10 transition-all cursor-pointer text-center group"
+            >
+              <span className="text-xs font-bold text-cyan-light group-hover:text-white">
+                Admin Demo
+              </span>
+              <span className="text-[10px] text-text-muted mt-0.5 font-mono">
+                /admin
+              </span>
+            </button>
+          </div>
+        </div>
       </form>
     </AuthLayout>
   );

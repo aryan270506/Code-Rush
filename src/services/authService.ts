@@ -31,11 +31,65 @@ function generateLocalSecureOtp(): string {
 
 const DEV_OTP_STORAGE_PREFIX = "cb_dev_otp_";
 
+export const DEMO_CREDENTIALS = {
+  participant: {
+    email: "participant@codebattle.dev",
+    password: "Password@123",
+    displayName: "Alex Rivera (Demo Participant)",
+    role: "participant" as const,
+  },
+  admin: {
+    email: "admin@codebattle.dev",
+    password: "AdminPassword@123",
+    displayName: "Code Battle Administrator",
+    role: "admin" as const,
+  },
+};
+
 export const authService = {
   /**
    * Log in participant or administrator
    */
   async login(email: string, password: string): Promise<{ user: User; profile: UserProfile | null }> {
+    const cleanEmail = email.trim().toLowerCase();
+
+    // Check if logging in with demo credentials
+    const isDemoAdmin =
+      cleanEmail === DEMO_CREDENTIALS.admin.email.toLowerCase() &&
+      password === DEMO_CREDENTIALS.admin.password;
+    const isDemoParticipant =
+      cleanEmail === DEMO_CREDENTIALS.participant.email.toLowerCase() &&
+      password === DEMO_CREDENTIALS.participant.password;
+
+    if (isDemoAdmin || isDemoParticipant) {
+      const isAdm = isDemoAdmin;
+      const demoUser = {
+        uid: isAdm ? "demo-admin-uid" : "demo-participant-uid",
+        email: cleanEmail,
+        displayName: isAdm ? DEMO_CREDENTIALS.admin.displayName : DEMO_CREDENTIALS.participant.displayName,
+        emailVerified: true,
+        reload: async () => {},
+        getIdToken: async () => "demo-token",
+      } as unknown as User;
+
+      const demoProfile: UserProfile = {
+        uid: demoUser.uid,
+        email: cleanEmail,
+        displayName: demoUser.displayName || "",
+        role: isAdm ? "admin" : "participant",
+        emailVerified: true,
+        accountStatus: "active",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      sessionStorage.setItem("cb_demo_user", JSON.stringify({ user: demoUser, profile: demoProfile }));
+      sessionStorage.setItem("cb_verified_" + demoUser.uid, "true");
+      sessionStorage.setItem("cb_verified_" + cleanEmail, "true");
+
+      return { user: demoUser, profile: demoProfile };
+    }
+
     if (!isFirebaseConfigured) {
       throw new Error(
         "Firebase is not configured. Please add your credentials in .env (see .env.example) or start Firebase Emulators."
@@ -316,7 +370,12 @@ export const authService = {
    * Sign out current user
    */
   async logout(): Promise<void> {
-    await signOut(auth);
+    sessionStorage.removeItem("cb_demo_user");
+    try {
+      await signOut(auth);
+    } catch {
+      // ignore
+    }
   },
 
   /**

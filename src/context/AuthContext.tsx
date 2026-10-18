@@ -92,6 +92,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setLoading(false);
         }
       } else {
+        const demoRaw = sessionStorage.getItem("cb_demo_user");
+        if (demoRaw) {
+          try {
+            const parsed = JSON.parse(demoRaw);
+            setUser(parsed.user);
+            setProfile(parsed.profile);
+            setLoading(false);
+            return;
+          } catch {
+            // ignore
+          }
+        }
         setProfile(null);
         if (unsubscribeSnapshot) {
           unsubscribeSnapshot();
