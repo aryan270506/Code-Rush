@@ -1,4 +1,4 @@
-import { ref, get, update } from "firebase/database";
+import { ref, get } from "firebase/database";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { db, rtdb } from "../lib/firebase";
 import { realtimeDbService, DEFAULT_COMPETITION_ID } from "./realtimeDbService";
